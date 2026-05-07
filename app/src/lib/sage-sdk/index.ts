@@ -16,6 +16,7 @@ export { PROGRAM_ID, deriveUserVaultPda } from "./pdas";
 export {
   createSageProgram,
   type SageProgram,
+  type SageSigner,
   deriveVaultAddresses,
   type VaultAddresses,
   fetchUserVault,
@@ -26,3 +27,5 @@ export {
   buildCompleteTaskIx,
   buildWithdrawIx,
 } from "./program";
+
+export { snapshotVault, type VaultSnapshot } from "./format";

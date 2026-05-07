@@ -3,6 +3,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 import { DepositCard } from "@/components/DepositCard";
 import { VaultPanel } from "@/components/VaultPanel";
+import { VoiceAgent } from "@/components/VoiceAgent";
 import { YieldList } from "@/components/YieldList";
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
       <main className="mx-auto max-w-3xl px-6 py-12 space-y-8">
         <VaultPanel />
         {connected && <DepositCard />}
+        <VoiceAgent />
         <YieldList />
       </main>
     </div>

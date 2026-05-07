@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Buffer } from "buffer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConversationProvider } from "@elevenlabs/react";
 
 import "./index.css";
 import App from "./App.tsx";
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <WalletProvider>
-        <App />
+        <ConversationProvider>
+          <App />
+        </ConversationProvider>
       </WalletProvider>
     </QueryClientProvider>
   </StrictMode>,
