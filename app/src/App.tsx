@@ -1,9 +1,13 @@
+import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+import { DepositCard } from "@/components/DepositCard";
 import { VaultPanel } from "@/components/VaultPanel";
 import { YieldList } from "@/components/YieldList";
 
 function App() {
+  const { connected } = useWallet();
+
   return (
     <div className="min-h-full">
       <header className="border-b border-sage-border">
@@ -18,8 +22,9 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-12 space-y-10">
+      <main className="mx-auto max-w-3xl px-6 py-12 space-y-8">
         <VaultPanel />
+        {connected && <DepositCard />}
         <YieldList />
       </main>
     </div>
