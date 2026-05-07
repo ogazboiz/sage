@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      global: "globalThis",
+      "process.env": {},
+    },
     server: {
       proxy: {
         "/api/lifi-earn": {
