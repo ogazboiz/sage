@@ -19,6 +19,13 @@ export default defineConfig(({ mode }) => {
           target: "https://earn.li.fi",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/lifi-earn/, ""),
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq) => {
+              if (env.LIFI_API_KEY) {
+                proxyReq.setHeader("x-lifi-api-key", env.LIFI_API_KEY);
+              }
+            });
+          },
         },
         "/api/lifi-composer": {
           target: "https://li.quest",

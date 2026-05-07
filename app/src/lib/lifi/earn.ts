@@ -20,7 +20,7 @@ export interface FetchVaultsParams {
 export async function fetchEarnVaults(
   params: FetchVaultsParams = {},
 ): Promise<EarnVaultsResponse> {
-  const url = new URL(`${EARN_PROXY}/v1/earn/vaults`, window.location.origin);
+  const url = new URL(`${EARN_PROXY}/v1/vaults`, window.location.origin);
   if (params.cursor) url.searchParams.set("cursor", params.cursor);
   if (params.chainId) url.searchParams.set("chainId", String(params.chainId));
   if (params.sortBy) url.searchParams.set("sortBy", params.sortBy);
