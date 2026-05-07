@@ -5,11 +5,11 @@ package_manager = "pnpm"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-sage_vault = "Cmt4NhqpB9pGhFppCWUdSPJPc9VprsDEwwr9vF3YaU9y"
-
 [programs.devnet]
-sage_vault = "Cmt4NhqpB9pGhFppCWUdSPJPc9VprsDEwwr9vF3YaU9y"
+sage_vault = "64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ"
+
+[programs.localnet]
+sage_vault = "64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ"
 
 [provider]
 cluster = "devnet"
