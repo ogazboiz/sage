@@ -55,7 +55,23 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": "/src",
+        // Node built-in shims for browser. Trailing slash forces npm-package
+        // resolution over the deprecated Node spec.
+        events: "events/",
+        stream: "stream-browserify",
+        util: "util/",
+        crypto: "crypto-browserify",
       },
+    },
+    optimizeDeps: {
+      include: [
+        "buffer",
+        "process",
+        "events",
+        "stream-browserify",
+        "util",
+        "crypto-browserify",
+      ],
     },
   };
 });
