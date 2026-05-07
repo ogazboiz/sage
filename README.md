@@ -18,12 +18,18 @@ You speak. Sage listens, plans, quotes the cost out loud, waits for your "yes," 
 
 ## Tracks
 
-This project targets four tracks at the dev3pack hackathon:
+This project targets the dev3pack hackathon across multiple tracks.
+
+**Primary:**
 
 - **Solana — Best App Overall.** Novel Anchor program with on-chain agent budget guarantees.
 - **Solana — x402 bonus.** A real x402 endpoint settled in USDC SPL on Solana.
 - **LI.FI — Cross-Chain UX.** Earn API for vault discovery + Composer for funding, both load-bearing.
 - **ElevenLabs — Best Integration.** Conversational Agents with tool calling, voice as the trigger for on-chain actions.
+
+**Stretch:**
+
+- **Solana Mobile — Best Mobile App.** Native Expo APK with Mobile Wallet Adapter, designed mobile-first. Same Anchor program, same shared core (`app/src/lib/`), with the voice loop and vault UI rebuilt natively for Android. Submitted to the Solana dApp Store.
 
 ## Architecture
 
@@ -59,13 +65,15 @@ Web app (Vite + React)
 | Layer | Choice |
 |---|---|
 | Solana program | Anchor |
-| Frontend | Vite + React 19 + Tailwind |
-| Wallet | `@solana/wallet-adapter` (Phantom, Solflare) |
+| Frontend (web, primary) | Vite + React 19 + Tailwind |
+| Frontend (mobile, stretch) | Expo + React Native |
+| Wallet (web) | `@solana/wallet-adapter` (Phantom, Solflare) |
+| Wallet (mobile) | `@solana-mobile/mobile-wallet-adapter-protocol` |
 | LI.FI | `@lifi/sdk` + Earn API |
 | Voice | ElevenLabs Conversational Agents |
 | LLM (intent + rationale) | Gemini 2.5 Flash |
 | x402 | Custom middleware on Solana SPL USDC |
-| Hosting | Vercel (web, x402 service) |
+| Hosting | Vercel (web, x402 service), EAS (mobile build) |
 | RPC | Helius devnet |
 
 ## Setup
