@@ -1,0 +1,61 @@
+# PRD and planning docs — kept local, not pushed
+PRD.md
+NOTES.md
+TODO.md
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.log
+.yarn/install-state.gz
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.vercel/
+.turbo/
+.expo/
+
+# Env / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# Solana / Anchor
+target/
+.anchor/
+test-ledger/
+keypairs/
+*.so
+
+# Logs
+logs/
+*.log
+
+# Misc
+coverage/
+.nyc_output/
