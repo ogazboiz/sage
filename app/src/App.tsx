@@ -1,6 +1,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+import { BridgeCard } from "@/components/BridgeCard";
 import { BriefingCard } from "@/components/BriefingCard";
 import { DepositCard } from "@/components/DepositCard";
 import { VaultPanel } from "@/components/VaultPanel";
@@ -27,6 +28,7 @@ function App() {
       <main className="mx-auto max-w-3xl px-6 py-12 space-y-8">
         <VaultPanel />
         {connected && <DepositCard />}
+        {connected && <BridgeCard />}
         <VoiceAgent />
         {connected && <BriefingCard />}
         <YieldList />

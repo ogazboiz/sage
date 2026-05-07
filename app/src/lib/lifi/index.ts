@@ -5,6 +5,12 @@ export {
   type FetchVaultsParams,
 } from "./earn";
 
+export {
+  fetchQuote,
+  type QuoteRequest,
+  type QuoteResponse,
+} from "./composer";
+
 export type {
   EarnVault,
   EarnVaultsResponse,
