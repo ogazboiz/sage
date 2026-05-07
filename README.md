@@ -107,7 +107,8 @@ pnpm dev
 
 | Item | Network | Address |
 |---|---|---|
-| `sage_vault` program | Devnet | _coming soon_ |
+| `sage_vault` program | Devnet | [`64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ`](https://solscan.io/account/64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ?cluster=devnet) |
+| Sage test USDC mint | Devnet | [`EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon`](https://solscan.io/account/EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon?cluster=devnet) |
 | x402 briefing endpoint | Devnet | _coming soon_ |
 | Web demo | — | _coming soon_ |
 

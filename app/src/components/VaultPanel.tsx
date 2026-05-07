@@ -3,12 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 import { useSageProgram } from "@/hooks/useSageProgram";
+import { useInitVault } from "@/hooks/useInitVault";
 import {
   deriveUserVaultPda,
   fetchUserVault,
   PROGRAM_ID_STRING,
   SAGE_USDC_MINT,
 } from "@/lib/sage-sdk";
+
+function explorerUrl(addr: string): string {
+  return `https://solscan.io/account/${addr}?cluster=devnet`;
+}
+
+function txUrl(sig: string): string {
+  return `https://solscan.io/tx/${sig}?cluster=devnet`;
+}
 
 export function VaultPanel() {
   const { publicKey } = useWallet();
@@ -28,6 +37,8 @@ export function VaultPanel() {
     },
   });
 
+  const initVault = useInitVault();
+
   if (!publicKey) {
     return (
       <div className="rounded-2xl border border-sage-border bg-sage-surface p-8 text-center">
@@ -45,9 +56,16 @@ export function VaultPanel() {
           <p className="text-xs uppercase tracking-widest text-sage-text-dim">
             Vault PDA
           </p>
-          <p className="font-mono text-sm break-all text-sage-text">
-            {vaultPda?.toBase58()}
-          </p>
+          {vaultPda && (
+            <a
+              className="font-mono text-sm break-all text-sage-text hover:text-sage-accent"
+              href={explorerUrl(vaultPda.toBase58())}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {vaultPda.toBase58()}
+            </a>
+          )}
         </div>
         <button
           type="button"
@@ -83,24 +101,68 @@ export function VaultPanel() {
                 {vaultQuery.data.activeTask ? "yes" : "none"}
               </span>
             </p>
+            <p className="text-xs text-sage-text-dim mt-2 break-all">
+              Agent identity:{" "}
+              <span className="font-mono text-sage-text">
+                {vaultQuery.data.agentKeypair.toBase58()}
+              </span>
+            </p>
           </div>
         ) : (
-          <p className="text-sage-warning">
-            No vault yet. Init flow lands once devnet is funded.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sage-warning">No vault yet for this wallet.</p>
+            <button
+              type="button"
+              disabled={initVault.isPending}
+              onClick={() => initVault.mutate()}
+              className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {initVault.isPending ? "Initialising…" : "Initialise vault"}
+            </button>
+            {initVault.isSuccess && (
+              <p className="text-xs text-sage-success break-all">
+                Done.{" "}
+                <a
+                  href={txUrl(initVault.data.signature)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  view tx
+                </a>
+              </p>
+            )}
+            {initVault.isError && (
+              <p className="text-xs text-sage-danger break-all">
+                {(initVault.error as Error).message}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
       <div className="border-t border-sage-border pt-4 space-y-1 text-xs text-sage-text-dim">
         <p>
           Program:{" "}
-          <span className="font-mono text-sage-text">{PROGRAM_ID_STRING}</span>
+          <a
+            className="font-mono text-sage-text hover:text-sage-accent"
+            href={explorerUrl(PROGRAM_ID_STRING)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {PROGRAM_ID_STRING}
+          </a>
         </p>
         <p>
           USDC mint:{" "}
-          <span className="font-mono text-sage-text">
+          <a
+            className="font-mono text-sage-text hover:text-sage-accent"
+            href={explorerUrl(SAGE_USDC_MINT.toBase58())}
+            target="_blank"
+            rel="noreferrer"
+          >
             {SAGE_USDC_MINT.toBase58()}
-          </span>
+          </a>
         </p>
       </div>
     </div>
