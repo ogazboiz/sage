@@ -1,0 +1,21 @@
+[toolchain]
+package_manager = "pnpm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+sage_vault = "Cmt4NhqpB9pGhFppCWUdSPJPc9VprsDEwwr9vF3YaU9y"
+
+[programs.devnet]
+sage_vault = "Cmt4NhqpB9pGhFppCWUdSPJPc9VprsDEwwr9vF3YaU9y"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]
