@@ -1,17 +1,15 @@
+// MUST stay first — sets globalThis.Buffer + globalThis.process before any
+// SPL/anchor module loads. Side-effect import.
+import "./polyfills";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Buffer } from "buffer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
 
 import "./index.css";
 import App from "./App.tsx";
 import { WalletProvider } from "./providers/WalletProvider";
-
-// Wallet adapter expects Buffer in the global scope.
-if (typeof globalThis !== "undefined" && !globalThis.Buffer) {
-  globalThis.Buffer = Buffer;
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {
