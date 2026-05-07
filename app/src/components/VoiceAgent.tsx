@@ -8,6 +8,7 @@ import {
 import { useSageProgram } from "@/hooks/useSageProgram";
 import { useSolanaVaults } from "@/hooks/useSolanaVaults";
 import { useDeposit } from "@/hooks/useDeposit";
+import { usePayBriefing } from "@/hooks/usePayBriefing";
 import { snapshotVault } from "@/lib/sage-sdk";
 import type { ClientTools } from "@elevenlabs/react";
 
@@ -23,6 +24,7 @@ export function VoiceAgent() {
     resultCount: 3,
   });
   const deposit = useDeposit();
+  const payBriefing = usePayBriefing();
   const [transcript, setTranscript] = useState<string[]>([]);
 
   const tools = useMemo<ClientTools>(() => {
@@ -79,8 +81,21 @@ export function VoiceAgent() {
           return `Deposit failed: ${(err as Error).message}`;
         }
       },
+
+      pay_briefing: async () => {
+        if (!program || !publicKey) return "Wallet not connected.";
+        try {
+          const result = await payBriefing.mutateAsync();
+          return JSON.stringify({
+            briefing: result.briefing,
+            signature: result.signature,
+          });
+        } catch (err) {
+          return `Briefing payment failed: ${(err as Error).message}`;
+        }
+      },
     };
-  }, [program, publicKey, vaults.data, deposit]);
+  }, [program, publicKey, vaults.data, deposit, payBriefing]);
 
   const conversation = useConversation({
     clientTools: tools,
