@@ -48,7 +48,6 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const payBriefing = usePayBriefing();
   const [transcript, setTranscript] = useState<string[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
-  const pendingResolverRef = useRef<((s: string) => void) | null>(null);
   const [lastDisconnect, setLastDisconnect] = useState<{
     reason: string;
     message?: string;
@@ -123,19 +122,20 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         }
         const { publicKey } = depsRef.current;
         if (!publicKey) return "Wallet not connected.";
-        return await new Promise<string>((resolve) => {
-          pendingResolverRef.current = resolve;
-          setPending({ kind: "deposit", amount: num });
-        });
+        // Return immediately. ElevenLabs imposes a tool-call timeout and the
+        // user has to click the wallet, so we surface a confirm card and let
+        // the agent know to wait for a contextual update with the result.
+        setPending({ kind: "deposit", amount: num });
+        return `Showed the user a confirm card for ${num.toFixed(
+          2,
+        )} USDC. Tell them to tap Confirm on screen, then wait for an update with the transaction result.`;
       },
 
       pay_briefing: async () => {
         const { publicKey } = depsRef.current;
         if (!publicKey) return "Wallet not connected.";
-        return await new Promise<string>((resolve) => {
-          pendingResolverRef.current = resolve;
-          setPending({ kind: "briefing" });
-        });
+        setPending({ kind: "briefing" });
+        return "Showed the user a confirm card for the 0.20 USDC briefing. Tell them to tap Confirm on screen, then wait for an update with the result.";
       },
     };
     // depsRef reads always pick up the latest values, so we don't depend on
@@ -179,8 +179,6 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             : ""
         }`,
       ]);
-      pendingResolverRef.current?.("Session ended.");
-      pendingResolverRef.current = null;
       setPending(null);
     },
     onUnhandledClientToolCall: (call) => {
@@ -238,40 +236,51 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
     });
   }
 
+  // The user click is the wallet's required user gesture. Once the tx
+  // settles (or fails) we push the result back to the agent via a
+  // contextual update so it can speak it. The tool call itself already
+  // returned, so this stays well clear of the ElevenLabs tool timeout.
   async function confirmPending() {
     if (!pending) return;
-    const resolve = pendingResolverRef.current;
-    pendingResolverRef.current = null;
-    if (pending.kind === "deposit") {
-      const amount = pending.amount;
+    const current = pending;
+    setPending(null);
+    let update: string;
+    if (current.kind === "deposit") {
       try {
-        const sig = await depsRef.current.deposit.mutateAsync(amount);
-        resolve?.(
-          `Deposited ${amount.toFixed(2)} USDC. tx ${sig.slice(0, 12)}…`,
-        );
+        const sig = await depsRef.current.deposit.mutateAsync(current.amount);
+        update = `Deposit confirmed. ${current.amount.toFixed(
+          2,
+        )} USDC moved into the vault. tx ${sig.slice(0, 12)}…`;
       } catch (err) {
-        resolve?.(`Deposit failed: ${(err as Error).message}`);
+        update = `Deposit failed: ${(err as Error).message}`;
       }
     } else {
       try {
         const result = await depsRef.current.payBriefing.mutateAsync();
-        resolve?.(
-          JSON.stringify({
-            briefing: result.briefing,
-            signature: result.signature,
-          }),
-        );
+        update = `Briefing settled on-chain. tx ${result.signature.slice(
+          0,
+          12,
+        )}…  Briefing text: ${result.briefing}`;
       } catch (err) {
-        resolve?.(`Briefing failed: ${(err as Error).message}`);
+        update = `Briefing failed: ${(err as Error).message}`;
       }
     }
-    setPending(null);
+    try {
+      conversation.sendContextualUpdate(update);
+    } catch (err) {
+      console.warn("[voice] contextual update failed:", err);
+    }
   }
 
   function cancelPending() {
-    pendingResolverRef.current?.("User cancelled.");
-    pendingResolverRef.current = null;
     setPending(null);
+    try {
+      conversation.sendContextualUpdate(
+        "User cancelled the on-screen confirmation.",
+      );
+    } catch {
+      /* session may have ended */
+    }
   }
 
   // Last agent line for the subtitle bar (V1 design).
