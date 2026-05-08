@@ -31,7 +31,7 @@ export function OnboardingHero() {
   return (
     <div className="grid md:grid-cols-[1fr_360px] gap-0 card overflow-hidden">
       {/* Left — copy and steps */}
-      <div className="p-10 space-y-8 bg-sage-surface">
+      <div className="p-6 md:p-10 space-y-6 md:space-y-8 bg-sage-surface">
         <p className="label-mono">Sage · tutorial</p>
 
         <div className="space-y-4">
@@ -68,7 +68,7 @@ export function OnboardingHero() {
       </div>
 
       {/* Right — live preview */}
-      <div className="p-7 border-t md:border-t-0 md:border-l border-sage-border bg-white space-y-4">
+      <div className="p-5 md:p-7 border-t md:border-t-0 md:border-l border-sage-border bg-white space-y-4">
         <p className="label-mono">Live preview</p>
 
         <div className="card bg-sage-surface p-4 space-y-1">

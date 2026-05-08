@@ -76,7 +76,7 @@ export function BridgeCard() {
   }, [fromAmount, toAmount]);
 
   return (
-    <div className="card p-7 space-y-5">
+    <div className="card p-5 md:p-7 space-y-5">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-base font-semibold text-sage-text">
@@ -162,8 +162,8 @@ export function BridgeCard() {
 
       {/* Route */}
       <div className="card bg-white p-4">
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-3">
-          <div>
+        <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1fr] gap-3">
+          <div className="col-span-2 md:col-span-1">
             <p className="label-mono">Best route</p>
             <p className="text-[13px] font-semibold text-sage-text mt-1">
               {quote.data?.tool ??
@@ -188,7 +188,7 @@ export function BridgeCard() {
               {slippage != null ? `${slippage.toFixed(2)}%` : "—"}
             </p>
           </div>
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <p className="label-mono">Min received</p>
             <p className="num-mono text-[13px] mt-1">
               {quote.data?.estimate?.toAmountMin
@@ -201,7 +201,7 @@ export function BridgeCard() {
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => quote.mutate()}

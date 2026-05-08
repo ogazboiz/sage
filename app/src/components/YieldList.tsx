@@ -30,7 +30,7 @@ export function YieldList() {
   });
 
   return (
-    <div className="card p-7 space-y-5">
+    <div className="card p-5 md:p-7 space-y-5">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-base font-semibold text-sage-text">

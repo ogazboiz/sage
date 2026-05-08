@@ -124,6 +124,9 @@
     padding: 11px 20px;
     font-size: 14px;
   }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* Wallet adapter modal: respect the paper theme. */

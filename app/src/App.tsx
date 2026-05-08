@@ -49,6 +49,85 @@ interface ScreenContext {
   go: (s: Screen) => void;
 }
 
+function TabIcon({ screen, active }: { screen: Screen; active: boolean }) {
+  const stroke = active ? "currentColor" : "currentColor";
+  const sw = 1.5;
+  switch (screen) {
+    case "voice":
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth={sw} />
+          <circle
+            cx="12"
+            cy="12"
+            r="4"
+            fill={active ? "currentColor" : "none"}
+            stroke={stroke}
+            strokeWidth={sw}
+          />
+        </svg>
+      );
+    case "vault":
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <rect
+            x="3.5"
+            y="6"
+            width="17"
+            height="13"
+            rx="2"
+            stroke={stroke}
+            strokeWidth={sw}
+          />
+          <path d="M3.5 10h17" stroke={stroke} strokeWidth={sw} />
+        </svg>
+      );
+    case "bridge":
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M3 17V8M21 17V8M3 12c4-2 8-2 12 0s8 2 12 0"
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "yield":
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M4 18l5-6 4 4 7-9"
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "briefing":
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <rect
+            x="4"
+            y="4"
+            width="16"
+            height="16"
+            rx="2"
+            stroke={stroke}
+            strokeWidth={sw}
+          />
+          <path
+            d="M8 9h8M8 13h8M8 17h5"
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+  }
+}
+
 function App() {
   const { connected } = useWallet();
   const [screen, setScreen] = useState<Screen>("voice");
@@ -59,7 +138,7 @@ function App() {
   return (
     <div className="min-h-full">
       <header className="border-b border-sage-border bg-white">
-        <div className="mx-auto max-w-5xl px-6 py-3 flex items-center gap-6">
+        <div className="mx-auto max-w-5xl px-4 md:px-6 py-3 flex items-center gap-3 md:gap-6">
           <div className="font-mono text-sm tracking-[0.18em] text-sage-text font-semibold">
             SAGE
           </div>
@@ -93,42 +172,52 @@ function App() {
         </div>
       </header>
 
-      {!connected ? (
-        <main className="mx-auto max-w-5xl px-6 py-10">
-          <OnboardingHero />
-        </main>
-      ) : (
-        <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
-          {/* Screen header — section number + title + blurb, like wireframe section heads */}
-          <div className="flex items-baseline justify-between gap-4 flex-wrap">
-            <div className="flex items-baseline gap-3">
-              <span className="font-mono text-[11px] tracking-widest text-sage-text-dim">
-                {current.n}
-              </span>
-              <div>
-                <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
-                  {current.label}
-                </h2>
-                <p className="text-sm text-sage-text-dim">{current.blurb}</p>
-              </div>
-            </div>
-
-            {/* Mobile screen switcher */}
-            <div className="md:hidden flex gap-1 border border-sage-border rounded-md overflow-hidden">
-              {SCREENS.map((s) => (
+      {/* Mobile bottom tab bar — matches wireframe phone nav pattern */}
+      {connected && (
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-sage-border safe-bottom">
+          <div className="grid grid-cols-5">
+            {SCREENS.map((s) => {
+              const active = screen === s.key;
+              return (
                 <button
                   key={s.key}
                   type="button"
                   onClick={() => setScreen(s.key)}
-                  className={`px-2.5 py-1 text-[11px] ${
-                    screen === s.key
-                      ? "bg-sage-text text-white"
-                      : "bg-white text-sage-text"
+                  className={`flex flex-col items-center justify-center gap-1 py-2.5 ${
+                    active ? "text-sage-accent" : "text-sage-text-dim"
                   }`}
                 >
-                  {s.label}
+                  <TabIcon screen={s.key} active={active} />
+                  <span
+                    className={`text-[10px] font-mono tracking-wider ${
+                      active ? "text-sage-text font-semibold" : ""
+                    }`}
+                  >
+                    {s.label}
+                  </span>
                 </button>
-              ))}
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
+      {!connected ? (
+        <main className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-10">
+          <OnboardingHero />
+        </main>
+      ) : (
+        <main className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-8 pb-24 md:pb-8 space-y-5 md:space-y-6">
+          {/* Screen header — section number + title + blurb, like wireframe section heads */}
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-[11px] tracking-widest text-sage-text-dim">
+              {current.n}
+            </span>
+            <div>
+              <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
+                {current.label}
+              </h2>
+              <p className="text-sm text-sage-text-dim">{current.blurb}</p>
             </div>
           </div>
 

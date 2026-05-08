@@ -214,7 +214,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   if (!isActive) {
     return (
-      <div className="card p-7 space-y-6">
+      <div className="card p-5 md:p-7 space-y-6">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-sage-text">
@@ -269,7 +269,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   return (
     <div className="rounded-lg overflow-hidden border border-sage-border grid md:grid-cols-[1fr_280px]">
       {/* Hero */}
-      <div className="relative bg-[#0F172A] text-white p-8 min-h-[420px] flex flex-col">
+      <div className="relative bg-[#0F172A] text-white p-5 md:p-8 min-h-[380px] md:min-h-[420px] flex flex-col">
         {/* Top strip — vault context (VaultV3 design: reduce vault to 2 numbers) */}
         <div className="flex items-start justify-between text-[11px] font-mono">
           <div>
@@ -303,20 +303,20 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           </button>
         </div>
 
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center py-4">
           <Orb
             speaking={speaking}
             listening={!speaking}
-            size={200}
+            size={160}
             dark
           />
         </div>
 
-        <div className="border-t border-white/15 pt-5">
+        <div className="border-t border-white/15 pt-4 md:pt-5">
           <p className="font-mono text-[10px] tracking-widest text-white/55 mb-2">
             ● SAGE · {speaking ? "SPEAKING" : "LISTENING"}
           </p>
-          <p className="text-[20px] font-medium leading-snug min-h-[2.5em]">
+          <p className="text-[16px] md:text-[20px] font-medium leading-snug min-h-[2.5em]">
             {lastAgentLine ??
               (speaking
                 ? "…"

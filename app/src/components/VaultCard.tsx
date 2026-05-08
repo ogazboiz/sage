@@ -44,13 +44,13 @@ export function VaultCard({
         : "safe";
 
   return (
-    <div className="card bg-white p-4 flex items-center gap-4">
+    <div className="card bg-white p-4 flex items-center gap-3 md:gap-4">
       {rank != null && (
-        <div className="w-9 h-9 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono font-bold text-sm">
+        <div className="w-8 h-8 md:w-9 md:h-9 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono font-bold text-sm">
           {rank}
         </div>
       )}
-      <div className="w-10 h-10 shrink-0 rounded-md border border-sage-border-soft bg-sage-surface-soft" />
+      <div className="hidden sm:block w-10 h-10 shrink-0 rounded-md border border-sage-border-soft bg-sage-surface-soft" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-sage-text">
