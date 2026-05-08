@@ -6,10 +6,6 @@ import {
   WalletProvider as SolanaWalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -22,21 +18,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return clusterApiUrl(NETWORK);
   }, []);
 
-  // We list legacy adapters explicitly because some browsers (Arc + extensions
-  // installed alongside another Solana wallet provider) hijack the
-  // wallet-standard registration channel, leaving StandardWalletAdapter to
-  // reject silently with "Connection rejected". The legacy adapters bind to
-  // window.phantom.solana and window.solflare directly which still work.
-  // Backpack and other wallet-standard-only wallets are auto-detected.
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    [],
-  );
+  // Modern Solana wallets (Phantom, Solflare, Backpack, Glow, etc.) all
+  // register themselves via the wallet-standard browser API. The adapter
+  // picks them up automatically with an empty wallets list.
+  const wallets = useMemo(() => [], []);
 
-  // Surface the actual underlying error rather than the generic "Unexpected
-  // error" the adapter swallows.
+  // Surface the actual underlying error rather than the generic message the
+  // WalletConnectionError wrapper swallows. The cause and stack reveal which
+  // extension actually rejected and why.
   const onError = useCallback((err: Error) => {
-    console.error("[wallet]", err.name, err.message, err);
+    console.error("[wallet] error:", err.name, err.message);
+    if ((err as Error & { cause?: unknown }).cause) {
+      console.error(
+        "[wallet] cause:",
+        (err as Error & { cause: unknown }).cause,
+      );
+    }
+    console.error("[wallet] stack:", err.stack);
   }, []);
 
   return (
