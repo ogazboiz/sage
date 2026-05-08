@@ -12,6 +12,8 @@ import { usePayBriefing } from "@/hooks/usePayBriefing";
 import { snapshotVault, type SageProgram } from "@/lib/sage-sdk";
 import type { ClientTools } from "@elevenlabs/react";
 import type { PublicKey } from "@solana/web3.js";
+import type { ScreenContext } from "@/App";
+import { useVaultUsdcBalance } from "@/hooks/useTokenBalances";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 
@@ -23,10 +25,11 @@ interface ToolDeps {
   payBriefing: ReturnType<typeof usePayBriefing>;
 }
 
-export function VoiceAgent() {
+export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const program = useSageProgram();
   const { publicKey } = useWallet();
   const { connection: _connection } = useConnection();
+  const vaultBalance = useVaultUsdcBalance();
   const vaults = useSolanaVaults({
     targetSymbol: "USDC",
     objective: "safest",
@@ -241,6 +244,22 @@ export function VoiceAgent() {
             Tools · get_vault_status · find_yield · propose_deposit ·
             pay_briefing
           </p>
+          {vaultBalance.data != null && (
+            <p className="text-xs text-sage-text-dim">
+              Vault holds{" "}
+              <span className="num-mono text-sage-text font-semibold">
+                ${vaultBalance.data.toFixed(2)}
+              </span>{" "}
+              ·{" "}
+              <button
+                type="button"
+                className="underline hover:text-sage-text"
+                onClick={() => ctx?.go("vault")}
+              >
+                view details ›
+              </button>
+            </p>
+          )}
         </div>
       </div>
     );
@@ -250,26 +269,38 @@ export function VoiceAgent() {
   return (
     <div className="rounded-lg overflow-hidden border border-sage-border grid md:grid-cols-[1fr_280px]">
       {/* Hero */}
-      <div className="relative bg-[#0F172A] text-white p-8 min-h-[360px] flex flex-col">
-        <div className="flex items-center justify-between text-[11px] font-mono opacity-70">
+      <div className="relative bg-[#0F172A] text-white p-8 min-h-[420px] flex flex-col">
+        {/* Top strip — vault context (VaultV3 design: reduce vault to 2 numbers) */}
+        <div className="flex items-start justify-between text-[11px] font-mono">
+          <div>
+            <p className="opacity-50 tracking-widest">VAULT</p>
+            <p className="text-[18px] mt-1 font-mono font-semibold tracking-[-0.02em]">
+              ${vaultBalance.data?.toFixed(2) ?? "—"}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="opacity-50 tracking-widest">SESSION</p>
+            <p className="mt-1">● {conversation.mode}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 text-[11px] font-mono mt-4 opacity-70">
           <span className="tracking-widest">SAGE · LIVE</span>
-          <span className="flex items-center gap-3">
-            <span>● {conversation.mode}</span>
-            <button
-              type="button"
-              onClick={() => conversation.setMuted(!conversation.isMuted)}
-              className="opacity-70 hover:opacity-100"
-            >
-              {conversation.isMuted ? "Unmute" : "Mute"}
-            </button>
-            <button
-              type="button"
-              onClick={() => conversation.endSession()}
-              className="opacity-70 hover:opacity-100"
-            >
-              End
-            </button>
-          </span>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={() => conversation.setMuted(!conversation.isMuted)}
+            className="opacity-70 hover:opacity-100"
+          >
+            {conversation.isMuted ? "Unmute" : "Mute"}
+          </button>
+          <button
+            type="button"
+            onClick={() => conversation.endSession()}
+            className="opacity-70 hover:opacity-100"
+          >
+            End
+          </button>
         </div>
 
         <div className="flex-1 flex items-center justify-center">

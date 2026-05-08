@@ -10,36 +10,36 @@ import { VaultPanel } from "@/components/VaultPanel";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { YieldList } from "@/components/YieldList";
 
-type Screen = "vault" | "yield" | "voice" | "bridge" | "briefing";
+type Screen = "voice" | "vault" | "bridge" | "yield" | "briefing";
 
 const SCREENS: { key: Screen; n: string; label: string; blurb: string }[] = [
+  {
+    key: "voice",
+    n: "01",
+    label: "Talk",
+    blurb: "Voice-first home. Speak intent, the agent acts.",
+  },
   {
     key: "vault",
     n: "02",
     label: "Vault",
-    blurb: "Balance, active task, ledger. Where you live.",
-  },
-  {
-    key: "yield",
-    n: "03",
-    label: "Yield",
-    blurb: "LI.FI Earn → ranked vaults across chains.",
-  },
-  {
-    key: "voice",
-    n: "04",
-    label: "Voice",
-    blurb: "ElevenLabs Conversational Agent — mic, transcript, tool calls.",
+    blurb: "Balance, active task, ledger.",
   },
   {
     key: "bridge",
-    n: "05",
+    n: "03",
     label: "Bridge",
     blurb: "LI.FI Composer · fund the vault from any chain.",
   },
   {
+    key: "yield",
+    n: "04",
+    label: "Yield",
+    blurb: "LI.FI Earn · ranked vaults across chains.",
+  },
+  {
     key: "briefing",
-    n: "06",
+    n: "05",
     label: "Briefing",
     blurb: "x402 paid task · voice → quote → on-chain settlement.",
   },
@@ -51,7 +51,7 @@ interface ScreenContext {
 
 function App() {
   const { connected } = useWallet();
-  const [screen, setScreen] = useState<Screen>("vault");
+  const [screen, setScreen] = useState<Screen>("voice");
   const ctx: ScreenContext = { go: setScreen };
 
   const current = SCREENS.find((s) => s.key === screen)!;
@@ -142,7 +142,7 @@ function App() {
 
           {screen === "yield" && <YieldList />}
 
-          {screen === "voice" && <VoiceAgent />}
+          {screen === "voice" && <VoiceAgent ctx={ctx} />}
 
           {screen === "bridge" && <BridgeCard />}
 
