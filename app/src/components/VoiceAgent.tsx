@@ -49,6 +49,11 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const [transcript, setTranscript] = useState<string[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const pendingResolverRef = useRef<((s: string) => void) | null>(null);
+  const [lastDisconnect, setLastDisconnect] = useState<{
+    reason: string;
+    message?: string;
+    quota?: boolean;
+  } | null>(null);
 
   // The ElevenLabs SDK captures the clientTools closure at session start, so a
   // stale closure can read publicKey=null even after the wallet connects mid
@@ -142,6 +147,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
     clientTools: tools,
     onConnect: () => {
       console.info("[voice] connected");
+      setLastDisconnect(null);
     },
     onMessage: (m) => {
       const text = `${m.source}: ${m.message}`;
@@ -159,10 +165,14 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       // Logging the full object is the only way to know whether the server
       // closed with an inactivity timeout, an agent error, or a network drop.
       console.error("[voice] disconnected:", details);
+      const message =
+        "message" in details && details.message ? details.message : undefined;
+      const quota = Boolean(message && /quota/i.test(message));
+      setLastDisconnect({ reason: details.reason, message, quota });
       setTranscript((prev) => [
         ...prev.slice(-9),
         `disconnected · ${details.reason}${
-          "message" in details && details.message ? ` · ${details.message}` : ""
+          message ? ` · ${message}` : ""
         }${
           "closeCode" in details && details.closeCode
             ? ` · ${details.closeCode}`
@@ -285,6 +295,25 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             {conversation.status}
           </span>
         </div>
+
+        {lastDisconnect?.quota && (
+          <div className="mt-4 border border-sage-warning/40 bg-sage-warning-soft rounded-md p-4 text-[12px] text-sage-text">
+            <p className="font-semibold">ElevenLabs quota reached</p>
+            <p className="text-sage-text-dim mt-1">
+              The conversational AI minute cap on this API key is exceeded.
+              Swap{" "}
+              <code className="font-mono">ELEVENLABS_API_KEY</code> in{" "}
+              <code className="font-mono">app/.env.local</code> for a key with
+              remaining minutes, then restart the dev server.
+            </p>
+          </div>
+        )}
+        {lastDisconnect && !lastDisconnect.quota && (
+          <div className="mt-4 border border-sage-border-soft rounded-md p-4 text-[12px] text-sage-text-dim">
+            Session ended · {lastDisconnect.reason}
+            {lastDisconnect.message ? ` · ${lastDisconnect.message}` : ""}
+          </div>
+        )}
 
         <div className="flex flex-col items-center gap-4 py-6">
           <Orb speaking={false} listening={false} size={144} />
