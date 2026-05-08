@@ -140,20 +140,41 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   const conversation = useConversation({
     clientTools: tools,
+    onConnect: () => {
+      console.info("[voice] connected");
+    },
     onMessage: (m) => {
       const text = `${m.source}: ${m.message}`;
       setTranscript((prev) => [...prev.slice(-9), text]);
     },
-    onError: (err) => {
+    onError: (message, context) => {
+      console.error("[voice] error:", message, context);
       setTranscript((prev) => [
         ...prev.slice(-9),
-        `error: ${typeof err === "string" ? err : JSON.stringify(err)}`,
+        `error: ${typeof message === "string" ? message : JSON.stringify(message)}`,
       ]);
     },
-    onDisconnect: () => {
+    onDisconnect: (details) => {
+      // DisconnectionDetails: { reason, message?, closeCode?, closeReason? }.
+      // Logging the full object is the only way to know whether the server
+      // closed with an inactivity timeout, an agent error, or a network drop.
+      console.error("[voice] disconnected:", details);
+      setTranscript((prev) => [
+        ...prev.slice(-9),
+        `disconnected · ${details.reason}${
+          "message" in details && details.message ? ` · ${details.message}` : ""
+        }${
+          "closeCode" in details && details.closeCode
+            ? ` · ${details.closeCode}`
+            : ""
+        }`,
+      ]);
       pendingResolverRef.current?.("Session ended.");
       pendingResolverRef.current = null;
       setPending(null);
+    },
+    onUnhandledClientToolCall: (call) => {
+      console.warn("[voice] unhandled tool call:", call);
     },
   });
 
