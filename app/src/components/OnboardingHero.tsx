@@ -1,101 +1,88 @@
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-import {
-  PROGRAM_ID_STRING,
-  SAGE_USDC_MINT,
-} from "@/lib/sage-sdk";
-
-const STEPS = [
-  { n: "1", title: "Connect" },
-  { n: "2", title: "Fund" },
-  { n: "3", title: "Talk" },
+const STEPS: [string, string, string][] = [
+  ["1", "Connect Phantom", "Vault PDA derived from your key"],
+  ["2", "Fund from any chain", "LI.FI bridges USDC into the vault"],
+  ["3", "Talk to Sage", "Voice → tool call → on-chain action"],
 ];
-
-function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
-}
 
 export function OnboardingHero() {
   return (
     <div className="grid md:grid-cols-[1fr_360px] gap-0 card overflow-hidden">
-      {/* Left — copy and steps */}
-      <div className="p-6 md:p-10 space-y-6 md:space-y-8 bg-sage-surface">
+      {/* Left — tutorial copy + numbered steps (ConnectWebV3) */}
+      <div className="p-6 md:px-[60px] md:py-[50px] bg-sage-surface flex flex-col gap-4 md:gap-[18px]">
         <p className="label-mono">Sage · tutorial</p>
 
-        <h1 className="text-4xl md:text-[42px] font-semibold text-sage-text leading-tight tracking-[-0.02em]">
+        <h1 className="text-[28px] md:text-[32px] font-semibold text-sage-text leading-[1.15] tracking-[-0.5px] max-w-[480px]">
           A wallet that does what you say.
         </h1>
 
-        <div className="flex items-center gap-4">
-          {STEPS.map((s) => (
-            <div key={s.n} className="flex items-center gap-2">
-              <div className="w-7 h-7 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono text-sm font-semibold text-sage-text">
-                {s.n}
+        <p className="text-[13px] text-sage-text-dim leading-[1.5] max-w-[440px]">
+          Sage holds USDC in a Solana program you own. You speak intent. Sage
+          proposes, you confirm, the on-chain budget releases the cents.
+        </p>
+
+        <div className="flex flex-col gap-3 mt-2">
+          {STEPS.map(([n, title, sub]) => (
+            <div key={n} className="flex gap-3 items-start">
+              <div className="w-6 h-6 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono text-[11px] font-semibold text-sage-text">
+                {n}
               </div>
-              <p className="text-sm font-semibold text-sage-text">{s.title}</p>
+              <div>
+                <p className="text-[13px] font-semibold text-sage-text">
+                  {title}
+                </p>
+                <p className="text-[11px] text-sage-text-dim mt-0.5">{sub}</p>
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="pt-2">
+        <div className="mt-3">
           <WalletMultiButton />
         </div>
       </div>
 
-      {/* Right — live preview */}
-      <div className="p-5 md:p-7 border-t md:border-t-0 md:border-l border-sage-border bg-white space-y-4">
-        <p className="label-mono">Live preview</p>
+      {/* Right — live preview pane */}
+      <div className="p-5 border-t md:border-t-0 md:border-l border-sage-border bg-white flex flex-col gap-2.5">
+        <p className="label-mono text-[9px]">Live preview</p>
 
-        <div className="card bg-sage-surface p-4 space-y-1">
+        <div className="card bg-white p-2.5">
           <p className="label-mono">Vault PDA</p>
-          <p className="font-mono text-xs text-sage-text-dim">
-            (derives from your wallet)
+          <p className="font-mono text-[10px] text-sage-text mt-1">
+            (derives on connect)
           </p>
         </div>
 
-        <div className="card bg-sage-surface p-4 space-y-1">
+        <div className="card bg-white p-2.5">
           <p className="label-mono">Balance</p>
-          <p className="num-mono text-3xl font-bold text-sage-text">$0.00</p>
+          <p className="num-mono text-[22px] font-bold text-sage-text mt-1 leading-none">
+            $0.00
+          </p>
         </div>
 
-        <div className="card bg-sage-surface p-4 space-y-2">
-          <p className="label-mono">Voice agent</p>
-          <p className="text-xs text-sage-text-dim font-mono">disconnected</p>
-          <div className="flex gap-1">
-            {Array.from({ length: 14 }).map((_, i) => (
-              <span
-                key={i}
-                className="w-0.5 bg-sage-text-dim/40"
-                style={{ height: `${[8, 12, 18, 22, 14, 10, 6, 16, 24, 20, 12, 8, 14, 18][i]}px` }}
-              />
-            ))}
-          </div>
+        <div className="space-y-1.5 pt-1">
+          <span
+            className="block h-1.5 rounded bg-sage-rule"
+            style={{ width: "100%" }}
+          />
+          <span
+            className="block h-1.5 rounded bg-sage-rule"
+            style={{ width: "85%" }}
+          />
+          <span
+            className="block h-1.5 rounded bg-sage-rule"
+            style={{ width: "60%" }}
+          />
+          <span
+            className="block h-1.5 rounded bg-sage-rule"
+            style={{ width: "78%" }}
+          />
         </div>
 
-        <div className="border-t border-dashed border-sage-border-soft pt-3 space-y-1.5 text-[11px] font-mono text-sage-text-dim">
-          <div className="flex justify-between gap-2">
-            <span>Program</span>
-            <a
-              href={`https://solscan.io/account/${PROGRAM_ID_STRING}?cluster=devnet`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sage-text hover:text-sage-accent break-all"
-            >
-              {shortAddr(PROGRAM_ID_STRING)}
-            </a>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span>USDC mint</span>
-            <a
-              href={`https://solscan.io/account/${SAGE_USDC_MINT.toBase58()}?cluster=devnet`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sage-text hover:text-sage-accent break-all"
-            >
-              {shortAddr(SAGE_USDC_MINT.toBase58())}
-            </a>
-          </div>
-        </div>
+        <p className="font-mono text-[10px] text-sage-text-dim mt-1.5">
+          ← Updates as you complete steps
+        </p>
       </div>
     </div>
   );
