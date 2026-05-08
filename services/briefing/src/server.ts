@@ -120,14 +120,122 @@ async function verifyPayment(
   return { ok: false, reason: "No matching SPL transfer to treasury found" };
 }
 
+// LI.FI Earn — live source for stablecoin yields. Solana mainnet chain id.
+const LIFI_SOLANA_CHAIN_ID = 1151111081099710;
+const LIFI_BASE = "https://li.quest";
+const LIFI_API_KEY = process.env.LIFI_API_KEY ?? process.env.VITE_LIFI_API_KEY;
+
+interface EarnVaultLite {
+  slug: string;
+  name: string;
+  chainId: number;
+  network: string;
+  protocol: { name: string };
+  underlyingTokens: { symbol: string }[];
+  analytics: {
+    apy: { base: number | null; reward: number | null; total: number | null };
+    tvl: { usd: string };
+  };
+}
+
+async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
+  if (!LIFI_API_KEY) return [];
+  const url = new URL(`${LIFI_BASE}/v1/vaults`);
+  url.searchParams.set("chainId", String(LIFI_SOLANA_CHAIN_ID));
+  url.searchParams.set("symbol", "USDC");
+  url.searchParams.set("sortBy", "apy");
+  url.searchParams.set("minTvlUsd", "100000");
+  const res = await fetch(url.toString(), {
+    headers: { "x-lifi-api-key": LIFI_API_KEY },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) {
+    throw new Error(`LI.FI Earn ${res.status}: ${await res.text()}`);
+  }
+  const body = (await res.json()) as { data: EarnVaultLite[] };
+  return body.data ?? [];
+}
+
+function compactUsd(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
 async function generateBriefing(): Promise<string> {
-  // Stubbed for the demo; swap for a Claude/Gemini call when keys are available.
-  return [
-    "Solana DeFi briefing, demo edition.",
-    "Stablecoin yields stayed in the 4–5 percent range across Kamino and Marginfi this week.",
-    "MEV-aware liquidity continues to favour Drift and Phoenix. Watch the ETH/SOL pair on Orca for unusual depth.",
-    "Risk note: avoid pools with reward APY over 60% of the headline number.",
-  ].join(" ");
+  const ts = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  let vaults: EarnVaultLite[] = [];
+  try {
+    vaults = await fetchTopSolanaUsdcVaults();
+  } catch (err) {
+    console.warn("[briefing] LI.FI fetch failed:", (err as Error).message);
+  }
+
+  if (vaults.length === 0) {
+    return [
+      `Solana DeFi briefing, ${ts}.`,
+      "Live yield feed unavailable for this run, so falling back to last known posture.",
+      "Stablecoin yields have been clustering in the 4 to 5 percent range across Kamino and Marginfi.",
+      "MEV-aware liquidity favours Drift and Phoenix.",
+      "Risk note: pools with reward APY above 60 percent of the headline number remain flagged.",
+    ].join(" ");
+  }
+
+  const ranked = vaults
+    .map((v) => ({
+      slug: v.slug,
+      protocol: v.protocol.name,
+      apy: v.analytics.apy.total ?? 0,
+      base: v.analytics.apy.base ?? 0,
+      reward: v.analytics.apy.reward ?? 0,
+      tvl: parseFloat(v.analytics.tvl.usd) || 0,
+    }))
+    .filter((v) => v.apy > 0)
+    .sort((a, b) => b.apy - a.apy);
+
+  const top = ranked.slice(0, 3);
+  const totalTvl = ranked
+    .slice(0, 10)
+    .reduce((sum, v) => sum + v.tvl, 0);
+
+  const rewardHeavy = ranked.find(
+    (v) => v.apy > 0 && v.reward / v.apy > 0.6 && v.apy > 8,
+  );
+
+  const topLine = top
+    .map((v) => `${v.protocol} at ${v.apy.toFixed(2)} percent`)
+    .join(", ");
+
+  const sentences = [
+    `Solana DeFi briefing, ${ts}.`,
+    `Top USDC vaults right now: ${topLine}.`,
+    `Combined TVL across the top ten USDC vaults sits at ${compactUsd(
+      totalTvl,
+    )}.`,
+  ];
+
+  if (rewardHeavy) {
+    sentences.push(
+      `Outlier flagged: ${rewardHeavy.protocol} at ${rewardHeavy.apy.toFixed(
+        2,
+      )} percent, but ${(
+        (rewardHeavy.reward / rewardHeavy.apy) *
+        100
+      ).toFixed(0)} percent of that comes from reward emissions, treat as caution.`,
+    );
+  } else {
+    sentences.push(
+      "No reward-heavy outliers in the top set, headline numbers look organic.",
+    );
+  }
+
+  sentences.push(
+    "Risk note: pools with reward APY above 60 percent of the headline number stay flagged in the data feed.",
+  );
+
+  return sentences.join(" ");
 }
 
 const app = express();

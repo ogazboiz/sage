@@ -4,8 +4,8 @@
   "description": "x402 paid endpoint that returns a Solana DeFi briefing",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=../../app/.env.local src/server.ts",
+    "start": "tsx --env-file-if-exists=../../app/.env.local src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
