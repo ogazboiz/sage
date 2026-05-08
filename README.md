@@ -27,6 +27,20 @@ You speak. Sage listens, plans, quotes the cost out loud, waits for your "yes," 
 
 **Stretch:** Solana Mobile — Expo + Mobile Wallet Adapter port. Reuses the framework-agnostic `app/src/lib/` core. Submitted only after the web build is fully filed.
 
+## Screens
+
+Sage is a five-tab single-page app. Layout deliberately leads with voice — that's the differentiator.
+
+| # | Tab | What it is |
+|---|---|---|
+| 01 | **Talk** | Voice-first home. Idle: orb + "Start talking" + your vault balance. Active: dark CarPlay-style hero with the agent's last spoken line as a subtitle, plus a tool-call timeline rail (`get_vault_status` / `find_yield` / `propose_deposit` / `pay_briefing`). |
+| 02 | **Vault** | 1.2fr / 1fr dashboard. Left: balance card with deployed/idle/spent pills, 3-up actions (Fund / Refresh / Find yield), active-task progress, addresses block. Right: ledger of recent on-chain activity. |
+| 03 | **Bridge** | LI.FI Composer source ↔ destination cards with chain dots, big mono amounts, and a route summary (best route / bridge fee / slippage / min received) all wired to a real `/v1/quote` call. |
+| 04 | **Yield** | LI.FI Earn ranked list. Segmented sort tabs (Safest / Highest APY / Balanced), symbol filter pills (All / USDC / USDT / SOL), caution toggle. Each row: rank circle, protocol + chain, risk pill, APY in mono. |
+| 05 | **Briefing** | x402 paid task. Fetches a live 402 challenge from `services/briefing`, displays quote/recipient/refund/network/nonce/expiry. Pay flow runs `approve_task → release_step → memo → complete_task` atomically. After settlement: receipt mode with briefing text and on-chain proof. **Gates on vault state** — shows a "vault required" card if no vault, or "insufficient balance" if vault is empty, with a one-click jump to the Vault tab. |
+
+Pre-connect, the app shows an **onboarding hero** (the design's `ConnectWebV3` split layout) explaining the three-step model (Connect → Fund → Talk) with a live preview pane. After connecting any wallet-standard wallet (Backpack / Phantom / Solflare), the app lands on **Talk**.
+
 ## Architecture
 
 ```
