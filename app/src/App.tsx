@@ -146,7 +146,9 @@ function App() {
 
           {screen === "bridge" && <BridgeCard />}
 
-          {screen === "briefing" && <BriefingCard />}
+          {screen === "briefing" && (
+            <BriefingCard onGoToVault={() => setScreen("vault")} />
+          )}
 
           <footer className="pt-10 pb-6 text-[11px] text-sage-text-dim font-mono flex flex-wrap gap-x-4 gap-y-1">
             <span>devnet</span>

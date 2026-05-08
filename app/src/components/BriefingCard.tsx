@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 import { usePayBriefing } from "@/hooks/usePayBriefing";
+import { useSageProgram } from "@/hooks/useSageProgram";
+import { useVaultUsdcBalance } from "@/hooks/useTokenBalances";
+import { fetchUserVault } from "@/lib/sage-sdk";
 import { fetchChallenge } from "@/lib/x402";
 
 const BRIEFING_URL =
@@ -10,24 +14,128 @@ function shortAddr(addr: string, n = 4): string {
   return `${addr.slice(0, n)}…${addr.slice(-n)}`;
 }
 
-export function BriefingCard() {
+interface BriefingCardProps {
+  onGoToVault?: () => void;
+}
+
+export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
   const pay = usePayBriefing();
   const result = pay.data;
 
+  const program = useSageProgram();
+  const { publicKey } = useWallet();
+
+  // Pre-flight: does the user have a vault, and is there enough balance?
+  // The on-chain ApproveTask returns AccountNotInitialized (Anchor 3012) if
+  // the vault PDA doesn't exist; better to gate that in the UI.
+  const vaultQuery = useQuery({
+    queryKey: ["sage-vault", publicKey?.toBase58()],
+    enabled: Boolean(program && publicKey),
+    queryFn: () =>
+      program && publicKey ? fetchUserVault(program, publicKey) : null,
+  });
+  const vaultBalance = useVaultUsdcBalance();
+
+  const vaultInitialised = Boolean(vaultQuery.data);
+
   // Fetch a fresh 402 challenge so the displayed numbers come from the
-  // server, not from hardcoded copy. Refetched after a successful payment so
-  // the user can pay again.
+  // server. Only fetch once the vault is in a usable state — pointless to
+  // burn a quote if the user can't pay anyway.
   const challenge = useQuery({
     queryKey: ["x402-challenge", BRIEFING_URL, result?.signature],
     queryFn: () => fetchChallenge(BRIEFING_URL),
     staleTime: 60_000,
-    enabled: !pay.isPending,
+    enabled: !pay.isPending && vaultInitialised,
   });
 
   const c = challenge.data;
   const refundEstimate = c
     ? Math.max(parseFloat(c.amount) * 0.5, 0).toFixed(2)
     : "0.10";
+
+  const quotedAmount = c ? parseFloat(c.amount) : 0.2;
+  const insufficientBalance =
+    vaultInitialised &&
+    typeof vaultBalance.data === "number" &&
+    vaultBalance.data < quotedAmount;
+
+  // GATE — must have a vault and enough balance before we even show the quote.
+  // Prevents the on-chain ApproveTask AccountNotInitialized error that just
+  // bounces the wallet sig with no useful UI feedback.
+  if (!vaultInitialised && vaultQuery.isFetched) {
+    return (
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="pill pill-warning">● Not ready</span>
+          <span className="label-mono">vault required</span>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-sage-text">
+            You need a vault before paying
+          </h3>
+          <p className="text-sm text-sage-text-dim mt-1">
+            x402 settlement releases USDC from your Sage vault. Initialise the
+            vault first, then come back to pay 0.20 USDC for a briefing.
+          </p>
+        </div>
+        <ol className="space-y-2 text-[13px] text-sage-text-dim">
+          <li className="flex gap-2">
+            <span className="font-mono text-sage-text">1.</span>
+            <span>Go to the Vault tab and click <span className="text-sage-text font-medium">Initialise vault</span>.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-mono text-sage-text">2.</span>
+            <span>Deposit at least 0.20 SAGE-USDC.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-mono text-sage-text">3.</span>
+            <span>Return here to pay the briefing.</span>
+          </li>
+        </ol>
+        <button
+          type="button"
+          onClick={() => onGoToVault?.()}
+          className="btn btn-primary w-full"
+        >
+          Go to Vault ›
+        </button>
+      </div>
+    );
+  }
+
+  if (insufficientBalance) {
+    return (
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="pill pill-warning">● Insufficient balance</span>
+          <span className="label-mono">need {quotedAmount.toFixed(2)} USDC</span>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-sage-text">
+            Vault is empty
+          </h3>
+          <p className="text-sm text-sage-text-dim mt-1">
+            Your vault holds{" "}
+            <span className="num-mono text-sage-text">
+              ${vaultBalance.data?.toFixed(2) ?? "0.00"}
+            </span>
+            . The briefing needs{" "}
+            <span className="num-mono text-sage-text">
+              {quotedAmount.toFixed(2)} USDC
+            </span>
+            . Deposit, then return here.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onGoToVault?.()}
+          className="btn btn-primary w-full"
+        >
+          Go to Vault to deposit ›
+        </button>
+      </div>
+    );
+  }
 
   // RECEIPT MODE — after successful payment (X402WebV2 design).
   if (result) {
