@@ -23,8 +23,49 @@ function txUrl(sig: string): string {
   return `https://solscan.io/tx/${sig}?cluster=devnet`;
 }
 
-function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
+function shortAddr(addr: string, n = 4): string {
+  return `${addr.slice(0, n)}…${addr.slice(-n)}`;
+}
+
+function TxRow({
+  kind,
+  amount,
+  time,
+  detail,
+  href,
+}: {
+  kind: string;
+  amount: string;
+  time: string;
+  detail?: string;
+  href?: string;
+}) {
+  const inner = (
+    <div className="grid grid-cols-[26px_1fr_auto] gap-3 items-center py-2.5 row-divider">
+      <div className="w-[26px] h-[26px] rounded-full border border-sage-border-soft" />
+      <div>
+        <p className="text-[13px] font-medium text-sage-text leading-tight">
+          {kind}
+        </p>
+        {detail && (
+          <p className="text-[10px] text-sage-text-dim font-mono mt-0.5">
+            {detail}
+          </p>
+        )}
+      </div>
+      <div className="text-right">
+        <p className="num-mono text-[12px] text-sage-text">{amount}</p>
+        <p className="text-[10px] text-sage-text-dim font-mono">{time}</p>
+      </div>
+    </div>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className="block hover:bg-sage-surface-soft px-1 -mx-1 rounded">
+      {inner}
+    </a>
+  ) : (
+    inner
+  );
 }
 
 export function VaultPanel() {
@@ -49,17 +90,6 @@ export function VaultPanel() {
   const vaultBalance = useVaultUsdcBalance();
   const initVault = useInitVault();
 
-  if (!publicKey) {
-    return (
-      <div className="card p-10 text-center space-y-3">
-        <p className="label-mono">Vault</p>
-        <p className="text-sage-text-dim">
-          Connect a wallet to spin up your Sage vault.
-        </p>
-      </div>
-    );
-  }
-
   const balanceUsd = vaultBalance.data ?? 0;
   const totalDeposited = vaultQuery.data
     ? Number(vaultQuery.data.totalDeposited.toString()) / 1_000_000
@@ -68,24 +98,29 @@ export function VaultPanel() {
     ? Number(vaultQuery.data.totalSpent.toString()) / 1_000_000
     : 0;
   const exists = Boolean(vaultQuery.data);
+  const idle = balanceUsd;
+  const deployed = Math.max(totalDeposited - totalSpent - idle, 0);
+  const activeTask = vaultQuery.data?.activeTask ?? null;
+  const taskBudgetRemaining = activeTask
+    ? Number(activeTask.budgetRemaining.toString()) / 1_000_000
+    : 0;
 
   return (
-    <div className="card p-7 space-y-6">
-      {/* Top: balance + status pills */}
-      <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="space-y-2">
+    <div className="grid md:grid-cols-[1.2fr_1fr] gap-5">
+      {/* LEFT — balance, actions, active task */}
+      <div className="space-y-4">
+        {/* Balance card */}
+        <div className="card p-5 space-y-2">
           <p className="label-mono">Vault balance · SAGE-USDC</p>
-          <p className="num-mono text-5xl font-bold text-sage-text">
+          <p className="num-mono text-[44px] font-bold text-sage-text leading-none tracking-[-0.02em]">
             ${balanceUsd.toFixed(2)}
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {exists ? (
               <>
-                <span className="pill">
-                  ${totalDeposited.toFixed(2)} deposited
-                </span>
+                <span className="pill">${deployed.toFixed(2)} deployed</span>
                 <span className="pill pill-accent">
-                  ${(totalDeposited - totalSpent).toFixed(2)} idle
+                  ${idle.toFixed(2)} idle
                 </span>
                 <span className="pill">${totalSpent.toFixed(2)} spent</span>
               </>
@@ -95,131 +130,196 @@ export function VaultPanel() {
           </div>
         </div>
 
-        <div className="text-right space-y-1">
-          <p className="label-mono">Wallet</p>
-          <p className="num-mono text-2xl font-semibold text-sage-text">
-            {ownerBalance.data?.toFixed(2) ?? "—"}
-          </p>
-          <p className="text-[11px] font-mono text-sage-text-dim">SAGE-USDC</p>
-        </div>
-      </div>
-
-      {/* Vault PDA + actions */}
-      <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-dashed border-sage-border-soft">
-        <div className="space-y-1">
-          <p className="label-mono">Vault PDA</p>
-          {vaultPda && (
-            <a
-              className="font-mono text-xs break-all text-sage-text hover:text-sage-accent"
-              href={explorerUrl(vaultPda.toBase58())}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {shortAddr(vaultPda.toBase58())}
-            </a>
-          )}
-        </div>
-        <div className="flex md:justify-end items-start gap-2">
-          {!exists && (
+        {/* Actions */}
+        <div className="grid grid-cols-3 gap-2">
+          {!exists ? (
             <button
               type="button"
               disabled={initVault.isPending}
               onClick={() => initVault.mutate()}
-              className="btn btn-primary"
+              className="btn btn-primary col-span-3"
             >
-              {initVault.isPending ? "Initialising…" : "Initialise vault"}
+              {initVault.isPending ? "Initialising…" : "+ Initialise vault"}
             </button>
+          ) : (
+            <>
+              <a className="btn btn-primary" href="#bridge">
+                + Fund
+              </a>
+              <button
+                type="button"
+                onClick={() => vaultQuery.refetch()}
+                className="btn"
+              >
+                Refresh
+              </button>
+              <a className="btn" href="#yield">
+                Find yield ›
+              </a>
+            </>
           )}
-          {exists && (
-            <button
-              type="button"
-              onClick={() => vaultQuery.refetch()}
-              className="btn btn-ghost text-xs text-sage-accent"
+        </div>
+
+        {initVault.isSuccess && (
+          <p className="text-xs text-sage-accent break-all">
+            Vault initialised.{" "}
+            <a
+              href={txUrl(initVault.data.signature)}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
             >
-              refresh
-            </button>
-          )}
+              view tx
+            </a>
+          </p>
+        )}
+        {initVault.isError && (
+          <p className="text-xs text-sage-danger break-all">
+            {(initVault.error as Error).message}
+          </p>
+        )}
+
+        {/* Active task */}
+        {activeTask && (
+          <div className="card p-4 space-y-2 border-sage-accent!">
+            <div className="flex items-center justify-between">
+              <p className="label-mono">● Active task</p>
+              <span className="pill pill-accent">running</span>
+            </div>
+            <p className="text-[13px] font-semibold text-sage-text">
+              x402 task
+            </p>
+            <p className="font-mono text-[10px] text-sage-text-dim break-all">
+              task_id{" "}
+              {Buffer.from(activeTask.taskId).toString("hex").slice(0, 10)}…
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-1.5 rounded-full bg-sage-rule overflow-hidden">
+                <div
+                  className="h-full bg-sage-accent"
+                  style={{
+                    width: `${
+                      activeTask.stepsExecuted > 0
+                        ? Math.min(
+                            (activeTask.stepsExecuted /
+                              (activeTask.stepsExecuted + 1)) *
+                              100,
+                            95,
+                          )
+                        : 5
+                    }%`,
+                  }}
+                />
+              </div>
+              <span className="num-mono text-[10px] text-sage-text-dim">
+                {taskBudgetRemaining.toFixed(2)} remaining
+              </span>
+            </div>
+            <p className="text-[11px] text-sage-text-dim">
+              {activeTask.stepsExecuted} steps executed
+            </p>
+          </div>
+        )}
+
+        {/* Vault PDA + program addresses */}
+        <div className="card p-4 space-y-2 text-[11px] font-mono">
+          <div className="flex justify-between">
+            <span className="text-sage-text-dim uppercase tracking-wider">
+              Vault PDA
+            </span>
+            {vaultPda ? (
+              <a
+                href={explorerUrl(vaultPda.toBase58())}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sage-text hover:text-sage-accent"
+              >
+                {shortAddr(vaultPda.toBase58())}
+              </a>
+            ) : (
+              <span className="text-sage-text-dim">—</span>
+            )}
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sage-text-dim uppercase tracking-wider">
+              Program
+            </span>
+            <a
+              href={explorerUrl(PROGRAM_ID_STRING)}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sage-text hover:text-sage-accent"
+            >
+              {shortAddr(PROGRAM_ID_STRING)}
+            </a>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sage-text-dim uppercase tracking-wider">
+              USDC mint
+            </span>
+            <a
+              href={explorerUrl(SAGE_USDC_MINT.toBase58())}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sage-text hover:text-sage-accent"
+            >
+              {shortAddr(SAGE_USDC_MINT.toBase58())}
+            </a>
+          </div>
+          <div className="flex justify-between border-t border-dashed border-sage-border-soft pt-2 mt-2">
+            <span className="text-sage-text-dim uppercase tracking-wider">
+              Wallet USDC
+            </span>
+            <span className="text-sage-text">
+              {ownerBalance.data?.toFixed(2) ?? "—"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Active task */}
-      {vaultQuery.data?.activeTask && (
-        <div className="card bg-white p-4 space-y-2 border-sage-accent!">
-          <div className="flex items-center justify-between">
-            <p className="label-mono">● Active task</p>
-            <span className="pill pill-accent">running</span>
-          </div>
-          <p className="font-mono text-[11px] text-sage-text-dim break-all">
-            task_id{" "}
-            {Buffer.from(vaultQuery.data.activeTask.taskId)
-              .toString("hex")
-              .slice(0, 10)}
-            …
-          </p>
-          <p className="text-sm text-sage-text">
-            <span className="num-mono font-semibold">
-              {(
-                Number(
-                  vaultQuery.data.activeTask.budgetRemaining.toString(),
-                ) / 1_000_000
-              ).toFixed(2)}
-            </span>{" "}
-            <span className="text-sage-text-dim">remaining ·</span>{" "}
-            <span className="num-mono">
-              {vaultQuery.data.activeTask.stepsExecuted}
-            </span>{" "}
-            <span className="text-sage-text-dim">steps</span>
-          </p>
+      {/* RIGHT — ledger */}
+      <div className="card p-5 flex flex-col">
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className="text-[14px] font-semibold text-sage-text">Ledger</h3>
+          <span className="label-mono">10 most recent</span>
         </div>
-      )}
-
-      {/* Init success */}
-      {initVault.isSuccess && (
-        <p className="text-xs text-sage-accent break-all border-t border-dashed border-sage-border-soft pt-3">
-          Vault initialised.{" "}
-          <a
-            href={txUrl(initVault.data.signature)}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            view tx
-          </a>
-        </p>
-      )}
-      {initVault.isError && (
-        <p className="text-xs text-sage-danger break-all border-t border-dashed border-sage-border-soft pt-3">
-          {(initVault.error as Error).message}
-        </p>
-      )}
-
-      {/* Footer addresses */}
-      <div className="border-t border-dashed border-sage-border-soft pt-3 grid grid-cols-2 gap-2 text-[11px] font-mono">
-        <div>
-          <p className="text-sage-text-dim uppercase tracking-wider mb-1">
-            Program
-          </p>
-          <a
-            className="text-sage-text hover:text-sage-accent break-all"
-            href={explorerUrl(PROGRAM_ID_STRING)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {shortAddr(PROGRAM_ID_STRING)}
-          </a>
-        </div>
-        <div className="text-right">
-          <p className="text-sage-text-dim uppercase tracking-wider mb-1">
-            USDC mint
-          </p>
-          <a
-            className="text-sage-text hover:text-sage-accent break-all"
-            href={explorerUrl(SAGE_USDC_MINT.toBase58())}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {shortAddr(SAGE_USDC_MINT.toBase58())}
-          </a>
+        <div className="flex-1">
+          {exists ? (
+            <>
+              <TxRow
+                kind="Vault initialised"
+                amount="—"
+                time="now"
+                detail="init_user_vault"
+              />
+              {totalDeposited > 0 && (
+                <TxRow
+                  kind="Deposit"
+                  amount={`+${totalDeposited.toFixed(2)}`}
+                  time="—"
+                  detail="deposit instruction"
+                />
+              )}
+              {totalSpent > 0 && (
+                <TxRow
+                  kind="x402 release"
+                  amount={`-${totalSpent.toFixed(2)}`}
+                  time="—"
+                  detail="release_step → treasury"
+                />
+              )}
+              {!totalDeposited && !totalSpent && (
+                <p className="text-[11px] text-sage-text-dim font-mono pt-2">
+                  Make a deposit to populate the ledger.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-[12px] text-sage-text-dim leading-relaxed">
+              Initialise the vault and your activity appears here. Every
+              instruction emits an on-chain event linked to solscan.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -197,112 +197,200 @@ export function VoiceAgent() {
     });
   }
 
-  return (
-    <div className="card p-7 space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            Voice agent
-          </h3>
-          <p className="text-sm text-sage-text-dim mt-1">
-            ElevenLabs Conversational Agent. Tools wired to the on-chain vault.
+  // Last agent line for the subtitle bar (V1 design).
+  const lastAgentLine = transcript
+    .slice()
+    .reverse()
+    .find((line) => line.startsWith("ai:"))
+    ?.replace(/^ai:\s*/, "");
+
+  // Tool calls observed (V2 timeline) — derive from transcript message lines.
+  const toolEvents = transcript.filter((line) =>
+    /(get_vault_status|find_yield|propose_deposit|pay_briefing)/.test(line),
+  );
+
+  if (!isActive) {
+    return (
+      <div className="card p-7 space-y-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-sage-text">
+              Voice agent
+            </h3>
+            <p className="text-sm text-sage-text-dim mt-1">
+              ElevenLabs Conversational Agent. Tools wired to the on-chain
+              vault.
+            </p>
+          </div>
+          <span className="pill">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-sage-text-dim" />
+            {conversation.status}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center gap-4 py-4">
+          <Orb speaking={false} listening={false} size={144} />
+          <button
+            type="button"
+            onClick={start}
+            className="btn btn-primary btn-lg"
+          >
+            ● Start talking
+          </button>
+          <p className="label-mono text-center">
+            Tools · get_vault_status · find_yield · propose_deposit ·
+            pay_briefing
           </p>
         </div>
-        <span
-          className={`pill ${
-            isActive ? "pill-accent" : ""
-          }`}
-        >
-          <span
-            className={`inline-block w-1.5 h-1.5 rounded-full ${
-              isActive ? "bg-sage-accent" : "bg-sage-text-dim"
-            }`}
+      </div>
+    );
+  }
+
+  // Active state — V1 CarPlay-style dark hero with subtitle, plus V2 timeline rail
+  return (
+    <div className="rounded-lg overflow-hidden border border-sage-border grid md:grid-cols-[1fr_280px]">
+      {/* Hero */}
+      <div className="relative bg-[#0F172A] text-white p-8 min-h-[360px] flex flex-col">
+        <div className="flex items-center justify-between text-[11px] font-mono opacity-70">
+          <span className="tracking-widest">SAGE · LIVE</span>
+          <span className="flex items-center gap-3">
+            <span>● {conversation.mode}</span>
+            <button
+              type="button"
+              onClick={() => conversation.setMuted(!conversation.isMuted)}
+              className="opacity-70 hover:opacity-100"
+            >
+              {conversation.isMuted ? "Unmute" : "Mute"}
+            </button>
+            <button
+              type="button"
+              onClick={() => conversation.endSession()}
+              className="opacity-70 hover:opacity-100"
+            >
+              End
+            </button>
+          </span>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <Orb
+            speaking={speaking}
+            listening={!speaking}
+            size={200}
+            dark
           />
-          {conversation.status}
-          {isActive ? ` · ${conversation.mode}` : ""}
-        </span>
+        </div>
+
+        <div className="border-t border-white/15 pt-5">
+          <p className="font-mono text-[10px] tracking-widest text-white/55 mb-2">
+            ● SAGE · {speaking ? "SPEAKING" : "LISTENING"}
+          </p>
+          <p className="text-[20px] font-medium leading-snug min-h-[2.5em]">
+            {lastAgentLine ??
+              (speaking
+                ? "…"
+                : "Try: 'what's my balance' · 'find safe USDC yield' · 'give me a briefing'")}
+          </p>
+        </div>
       </div>
 
-      {/* Orb visualization */}
-      <div className="flex flex-col items-center gap-4 py-4">
-        <div className="relative w-36 h-36">
-          {[1, 0.78, 0.55].map((s, i) => (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                inset: `${(1 - s) * 72}px`,
-                borderRadius: "50%",
-                border: `1.5px solid ${
-                  i === 2 ? "var(--color-sage-accent)" : "var(--color-sage-border)"
-                }`,
-                background:
-                  i === 2 ? "var(--color-sage-accent-soft)" : "transparent",
-                opacity: i === 0 ? 0.3 : i === 1 ? 0.6 : 1,
-                transition: "all 200ms ease",
-                transform: speaking ? "scale(1.05)" : "scale(1)",
-              }}
-            />
-          ))}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="label-mono text-sage-accent">
-              {!isActive
-                ? "Sage"
-                : speaking
-                  ? "speaking"
-                  : "listening"}
-            </span>
+      {/* Tool timeline rail */}
+      <div className="bg-white p-5 space-y-3 border-t md:border-t-0 md:border-l border-sage-border">
+        <p className="label-mono">Tool calls</p>
+
+        <div className="space-y-2">
+          {[
+            "get_vault_status",
+            "find_yield",
+            "propose_deposit",
+            "pay_briefing",
+          ].map((tool) => {
+            const seen = toolEvents.some((e) => e.includes(tool));
+            return (
+              <div
+                key={tool}
+                className="flex items-center justify-between text-[11px] font-mono py-1.5 border-b border-dashed border-sage-border-soft"
+              >
+                <span className={seen ? "text-sage-text" : "text-sage-text-dim"}>
+                  {tool}
+                </span>
+                <span
+                  className={
+                    seen ? "text-sage-accent" : "text-sage-text-faint"
+                  }
+                >
+                  {seen ? "✓" : "○"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {transcript.length > 0 && (
+          <div className="pt-2">
+            <p className="label-mono mb-2">Transcript</p>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {transcript.slice(-8).map((line, i) => (
+                <p
+                  key={i}
+                  className="text-[10px] font-mono text-sage-text-dim leading-snug"
+                >
+                  {line}
+                </p>
+              ))}
+            </div>
           </div>
-        </div>
-
-        <div className="flex gap-3">
-          {!isActive ? (
-            <button type="button" onClick={start} className="btn btn-primary btn-lg">
-              ● Start talking
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => conversation.endSession()}
-                className="btn"
-              >
-                End
-              </button>
-              <button
-                type="button"
-                onClick={() => conversation.setMuted(!conversation.isMuted)}
-                className="btn"
-              >
-                {conversation.isMuted ? "Unmute" : "Mute"}
-              </button>
-            </>
-          )}
-        </div>
-
-        {isActive && (
-          <p className="text-xs text-sage-text-dim text-center max-w-md">
-            Try: "what's my vault balance" · "find me safe USDC yield" · "give
-            me a briefing"
-          </p>
         )}
       </div>
+    </div>
+  );
+}
 
-      {transcript.length > 0 && (
-        <div className="border-t border-dashed border-sage-border-soft pt-4 space-y-2">
-          <p className="label-mono">Transcript</p>
-          <div className="bg-white border border-sage-border-soft rounded-md p-3 max-h-40 overflow-y-auto space-y-1">
-            {transcript.map((line, i) => (
-              <p
-                key={i}
-                className="text-xs font-mono text-sage-text-dim leading-relaxed"
-              >
-                {line}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
+function Orb({
+  speaking,
+  listening,
+  size = 140,
+  dark = false,
+}: {
+  speaking: boolean;
+  listening: boolean;
+  size?: number;
+  dark?: boolean;
+}) {
+  const stroke = dark ? "rgba(255,255,255,0.85)" : "var(--color-sage-border)";
+  const accent = "var(--color-sage-accent)";
+  const accentSoft = "var(--color-sage-accent-soft)";
+  return (
+    <div
+      className="relative"
+      style={{ width: size, height: size }}
+    >
+      {[1, 0.78, 0.55].map((s, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            inset: `${(1 - s) * (size / 2)}px`,
+            borderRadius: "50%",
+            border: `1.5px solid ${i === 2 ? accent : stroke}`,
+            background: i === 2 ? accentSoft : "transparent",
+            opacity: i === 0 ? 0.3 : i === 1 ? 0.6 : 1,
+            transition: "all 220ms ease",
+            transform: speaking ? "scale(1.06)" : "scale(1)",
+          }}
+        />
+      ))}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span
+          className="font-mono uppercase tracking-widest"
+          style={{
+            color: dark ? "rgba(255,255,255,0.85)" : "var(--color-sage-accent)",
+            fontSize: size > 160 ? 12 : 10,
+          }}
+        >
+          {speaking ? "speaking" : listening ? "listening" : "Sage"}
+        </span>
+      </div>
     </div>
   );
 }
