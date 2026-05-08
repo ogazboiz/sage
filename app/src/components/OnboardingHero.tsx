@@ -1,63 +1,129 @@
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-// ConnectWebV1 / ConnectMobileV1 — the default variant in
-// sage/project/wf-connect.jsx. Centered wallet card with two named rows
-// and a 1-of-3 step footer.
+import { PROGRAM_ID_STRING, SAGE_USDC_MINT } from "@/lib/sage-sdk";
+
+function shortAddr(addr: string): string {
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+const TOOL_STRIP: { line: string; tool?: string; status?: "ok" | "tx" }[] = [
+  { line: '"what\'s my balance"' },
+  { line: "get_vault_status", tool: "✓", status: "ok" },
+  { line: "$50.00  ·  0 deployed  ·  0 spent" },
+  { line: '"deposit 10 usdc"' },
+  { line: "propose_deposit", tool: "✓", status: "ok" },
+  { line: "approve_task → release_step", tool: "✓" },
+  { line: "tx 4nF…aZ2", status: "tx" },
+];
+
 export function OnboardingHero() {
-  const { setVisible } = useWalletModal();
-  const openModal = () => setVisible(true);
-
   return (
-    <div className="min-h-[560px] flex items-center justify-center px-2 md:px-10 py-6">
-      <div className="card w-full max-w-[420px] p-6 md:p-7 bg-white flex flex-col gap-4">
-        {/* logo placeholder circle */}
-        <div className="w-9 h-9 rounded-full border-[1.5px] border-sage-border" />
-
-        <div>
-          <h1 className="text-[20px] font-semibold text-sage-text leading-tight">
-            Welcome to Sage
-          </h1>
-          <p className="text-[13px] text-sage-text-dim mt-1.5 leading-snug">
-            A voice-first agent that manages a budget you control on Solana.
-          </p>
+    <div className="grid md:grid-cols-[1.3fr_1fr] gap-0 card overflow-hidden">
+      {/* LEFT — value prop + connect + proof */}
+      <div className="bg-sage-surface px-6 py-7 md:px-10 md:py-12 flex flex-col gap-5 md:gap-6">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-sage-accent" />
+          <p className="label-mono">Sage · devnet live</p>
         </div>
 
-        <button
-          type="button"
-          onClick={openModal}
-          className="rounded-md border border-sage-border-soft p-3 flex items-center gap-3 hover:border-sage-border transition-colors text-left"
-        >
-          <div className="w-7 h-7 bg-[#7C3AED] rounded-md shrink-0" />
-          <div className="flex-1">
-            <p className="text-[12px] font-semibold text-sage-text">Phantom</p>
-            <p className="text-[10px] text-sage-text-dim">Detected</p>
+        <h1 className="text-[34px] md:text-[44px] font-semibold text-sage-text leading-[1.05] tracking-[-0.02em] max-w-[520px]">
+          A wallet that does what you say.
+        </h1>
+
+        <p className="text-[14px] md:text-[15px] text-sage-text-dim leading-[1.55] max-w-[460px]">
+          Speak intent. A Solana program you own holds USDC and releases the
+          cents the moment you confirm.
+        </p>
+
+        <div className="pt-1">
+          <WalletMultiButton />
+        </div>
+
+        <div className="border-t border-dashed border-sage-border-soft pt-4 mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-mono text-sage-text-dim">
+          <a
+            href={`https://solscan.io/account/${PROGRAM_ID_STRING}?cluster=devnet`}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-sage-text"
+          >
+            program {shortAddr(PROGRAM_ID_STRING)} ↗
+          </a>
+          <a
+            href={`https://solscan.io/account/${SAGE_USDC_MINT.toBase58()}?cluster=devnet`}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-sage-text"
+          >
+            usdc {shortAddr(SAGE_USDC_MINT.toBase58())} ↗
+          </a>
+          <span>devnet</span>
+        </div>
+      </div>
+
+      {/* RIGHT — frozen demo strip showing the actual flow */}
+      <div className="bg-white border-t md:border-t-0 md:border-l border-sage-border px-5 py-6 md:p-6 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <p className="label-mono">Sample · voice → on-chain</p>
+          <span className="pill pill-accent">live</span>
+        </div>
+
+        <div className="flex flex-col gap-2 font-mono text-[12px]">
+          {TOOL_STRIP.map((row, i) => {
+            if (row.line.startsWith('"')) {
+              return (
+                <p
+                  key={i}
+                  className="italic text-sage-text-dim leading-snug"
+                >
+                  {row.line}
+                </p>
+              );
+            }
+            if (row.tool) {
+              return (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 pl-3 border-l border-sage-accent text-sage-text"
+                >
+                  <span className="text-sage-accent">{row.tool}</span>
+                  <span>{row.line}</span>
+                </div>
+              );
+            }
+            if (row.status === "tx") {
+              return (
+                <div
+                  key={i}
+                  className="pl-3 border-l border-sage-accent text-sage-accent"
+                >
+                  {row.line}
+                </div>
+              );
+            }
+            return (
+              <div
+                key={i}
+                className="pl-3 text-sage-text"
+              >
+                {row.line}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-dashed border-sage-border-soft pt-3 mt-1 flex items-center gap-3">
+          <div className="flex gap-0.5">
+            {[6, 12, 20, 14, 8, 16, 10].map((h, i) => (
+              <span
+                key={i}
+                className="w-0.5 bg-sage-accent rounded-sm"
+                style={{ height: `${h}px` }}
+              />
+            ))}
           </div>
-          <span className="btn btn-primary btn-sm">Connect</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={openModal}
-          className="rounded-md border border-sage-border-soft p-2.5 flex items-center gap-3 hover:border-sage-border transition-colors text-left"
-        >
-          <div className="w-[22px] h-[22px] bg-[#FBA21A] rounded shrink-0" />
-          <span className="flex-1 text-[12px] text-sage-text">Solflare</span>
-          <span className="text-sage-text-dim">›</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={openModal}
-          className="rounded-md border border-sage-border-soft p-2.5 flex items-center gap-3 hover:border-sage-border transition-colors text-left"
-        >
-          <div className="w-[22px] h-[22px] bg-sage-text rounded shrink-0" />
-          <span className="flex-1 text-[12px] text-sage-text">Backpack</span>
-          <span className="text-sage-text-dim">›</span>
-        </button>
-
-        <div className="flex justify-between items-center pt-1.5 text-[10px] text-sage-text-dim font-mono">
-          <span>STEP 1 OF 3 · WALLET</span>
-          <span>· · ·</span>
+          <p className="text-[10px] font-mono text-sage-text-dim tracking-wider">
+            ELEVENLABS · LI.FI · X402
+          </p>
         </div>
       </div>
     </div>
