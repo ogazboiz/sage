@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
@@ -9,8 +10,25 @@ import { VaultPanel } from "@/components/VaultPanel";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { YieldList } from "@/components/YieldList";
 
+type Screen = "vault" | "yield" | "voice" | "bridge";
+
+const SCREENS: { key: Screen; label: string }[] = [
+  { key: "vault", label: "Vault" },
+  { key: "yield", label: "Yield" },
+  { key: "voice", label: "Voice" },
+  { key: "bridge", label: "Bridge" },
+];
+
+const SCREEN_BLURB: Record<Screen, string> = {
+  vault: "Balance, active task, and the on-chain ledger.",
+  yield: "Live LI.FI Earn vaults, ranked by your intent.",
+  voice: "ElevenLabs Conversational Agent with on-chain tool calls.",
+  bridge: "LI.FI Composer · cross-chain funding into your vault.",
+};
+
 function App() {
   const { connected } = useWallet();
+  const [screen, setScreen] = useState<Screen>("vault");
 
   return (
     <div className="min-h-full">
@@ -20,19 +38,24 @@ function App() {
             SAGE
           </div>
           {connected && (
-            <nav className="hidden md:flex items-center gap-5 text-[13px] text-sage-text-dim">
-              <a className="text-sage-text font-medium" href="#vault">
-                Vault
-              </a>
-              <a className="hover:text-sage-text" href="#voice">
-                Voice
-              </a>
-              <a className="hover:text-sage-text" href="#bridge">
-                Bridge
-              </a>
-              <a className="hover:text-sage-text" href="#yield">
-                Yield
-              </a>
+            <nav className="hidden md:flex items-center gap-1">
+              {SCREENS.map((s) => {
+                const active = screen === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setScreen(s.key)}
+                    className={`px-3 py-1.5 text-[13px] rounded-md transition-colors ${
+                      active
+                        ? "text-sage-text font-medium bg-sage-surface-soft"
+                        : "text-sage-text-dim hover:text-sage-text"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
             </nav>
           )}
           <div className="flex-1" />
@@ -49,30 +72,53 @@ function App() {
           <OnboardingHero />
         </main>
       ) : (
-        <main className="mx-auto max-w-5xl px-6 py-8 space-y-10">
-          <section id="vault" className="space-y-6">
-            <h2 className="label-mono">Vault</h2>
-            <VaultPanel />
-            <div className="grid md:grid-cols-2 gap-6">
-              <DepositCard />
-              <BriefingCard />
+        <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
+          {/* Screen header */}
+          <div className="flex items-baseline justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
+                {SCREENS.find((s) => s.key === screen)?.label}
+              </h2>
+              <p className="text-sm text-sage-text-dim mt-1">
+                {SCREEN_BLURB[screen]}
+              </p>
             </div>
-          </section>
 
-          <section id="voice" className="space-y-4">
-            <h2 className="label-mono">Voice agent</h2>
-            <VoiceAgent />
-          </section>
+            {/* Mobile screen switcher */}
+            <div className="md:hidden flex gap-1 border border-sage-border rounded-md overflow-hidden">
+              {SCREENS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setScreen(s.key)}
+                  className={`px-3 py-1 text-[12px] ${
+                    screen === s.key
+                      ? "bg-sage-text text-white"
+                      : "bg-white text-sage-text"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <section id="bridge" className="space-y-4">
-            <h2 className="label-mono">Bridge</h2>
-            <BridgeCard />
-          </section>
+          {/* Active screen */}
+          {screen === "vault" && (
+            <div className="space-y-6">
+              <VaultPanel />
+              <div className="grid md:grid-cols-2 gap-6">
+                <DepositCard />
+                <BriefingCard />
+              </div>
+            </div>
+          )}
 
-          <section id="yield" className="space-y-4">
-            <h2 className="label-mono">Yield</h2>
-            <YieldList />
-          </section>
+          {screen === "yield" && <YieldList />}
+
+          {screen === "voice" && <VoiceAgent />}
+
+          {screen === "bridge" && <BridgeCard />}
 
           <footer className="pt-10 pb-6 text-[11px] text-sage-text-dim font-mono flex flex-wrap gap-x-4 gap-y-1">
             <span>devnet</span>
