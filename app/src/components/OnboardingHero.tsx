@@ -6,21 +6,9 @@ import {
 } from "@/lib/sage-sdk";
 
 const STEPS = [
-  {
-    n: "1",
-    title: "Connect a Solana wallet",
-    detail: "Vault PDA is derived from your key — you own it.",
-  },
-  {
-    n: "2",
-    title: "Fund from any chain",
-    detail: "LI.FI bridges USDC into the vault in one signature.",
-  },
-  {
-    n: "3",
-    title: "Talk to Sage",
-    detail: "Voice → tool call → on-chain action. The program enforces every cent.",
-  },
+  { n: "1", title: "Connect" },
+  { n: "2", title: "Fund" },
+  { n: "3", title: "Talk" },
 ];
 
 function shortAddr(addr: string): string {
@@ -34,36 +22,23 @@ export function OnboardingHero() {
       <div className="p-6 md:p-10 space-y-6 md:space-y-8 bg-sage-surface">
         <p className="label-mono">Sage · tutorial</p>
 
-        <div className="space-y-4">
-          <h1 className="text-4xl md:text-[42px] font-semibold text-sage-text leading-tight tracking-[-0.02em]">
-            A wallet that does what you say.
-          </h1>
-          <p className="text-base text-sage-text-dim max-w-md leading-relaxed">
-            Sage holds USDC in a Solana program you own. You speak intent —
-            Sage proposes, you confirm, the on-chain budget releases the
-            cents.
-          </p>
-        </div>
+        <h1 className="text-4xl md:text-[42px] font-semibold text-sage-text leading-tight tracking-[-0.02em]">
+          A wallet that does what you say.
+        </h1>
 
-        <div className="space-y-4">
+        <div className="flex items-center gap-4">
           {STEPS.map((s) => (
-            <div key={s.n} className="flex gap-3">
+            <div key={s.n} className="flex items-center gap-2">
               <div className="w-7 h-7 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono text-sm font-semibold text-sage-text">
                 {s.n}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-sage-text">{s.title}</p>
-                <p className="text-[13px] text-sage-text-dim mt-0.5">
-                  {s.detail}
-                </p>
-              </div>
+              <p className="text-sm font-semibold text-sage-text">{s.title}</p>
             </div>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 pt-2">
+        <div className="pt-2">
           <WalletMultiButton />
-          <p className="label-mono">Phantom · Solflare · Backpack</p>
         </div>
       </div>
 

@@ -21,10 +21,7 @@ export function DepositCard() {
 
   return (
     <div className="card p-6 space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-sage-text">Deposit</h3>
-        <p className="label-mono">Move USDC into vault</p>
-      </div>
+      <h3 className="text-base font-semibold text-sage-text">Deposit</h3>
 
       <div className="grid grid-cols-2 gap-3 text-[11px] font-mono">
         <div className="border border-dashed border-sage-border-soft rounded p-2">

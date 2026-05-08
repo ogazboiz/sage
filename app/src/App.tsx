@@ -12,37 +12,12 @@ import { YieldList } from "@/components/YieldList";
 
 type Screen = "voice" | "vault" | "bridge" | "yield" | "briefing";
 
-const SCREENS: { key: Screen; n: string; label: string; blurb: string }[] = [
-  {
-    key: "voice",
-    n: "01",
-    label: "Talk",
-    blurb: "Voice-first home. Speak intent, the agent acts.",
-  },
-  {
-    key: "vault",
-    n: "02",
-    label: "Vault",
-    blurb: "Balance, active task, ledger.",
-  },
-  {
-    key: "bridge",
-    n: "03",
-    label: "Bridge",
-    blurb: "LI.FI Composer · fund the vault from any chain.",
-  },
-  {
-    key: "yield",
-    n: "04",
-    label: "Yield",
-    blurb: "LI.FI Earn · ranked vaults across chains.",
-  },
-  {
-    key: "briefing",
-    n: "05",
-    label: "Briefing",
-    blurb: "x402 paid task · voice → quote → on-chain settlement.",
-  },
+const SCREENS: { key: Screen; n: string; label: string }[] = [
+  { key: "voice", n: "01", label: "Talk" },
+  { key: "vault", n: "02", label: "Vault" },
+  { key: "bridge", n: "03", label: "Bridge" },
+  { key: "yield", n: "04", label: "Yield" },
+  { key: "briefing", n: "05", label: "Briefing" },
 ];
 
 interface ScreenContext {
@@ -208,17 +183,14 @@ function App() {
         </main>
       ) : (
         <main className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-8 pb-24 md:pb-8 space-y-5 md:space-y-6">
-          {/* Screen header — section number + title + blurb, like wireframe section heads */}
+          {/* Screen header — section number + title */}
           <div className="flex items-baseline gap-3">
             <span className="font-mono text-[11px] tracking-widest text-sage-text-dim">
               {current.n}
             </span>
-            <div>
-              <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
-                {current.label}
-              </h2>
-              <p className="text-sm text-sage-text-dim">{current.blurb}</p>
-            </div>
+            <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
+              {current.label}
+            </h2>
           </div>
 
           {/* Active screen */}

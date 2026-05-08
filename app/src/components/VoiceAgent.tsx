@@ -214,24 +214,15 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   if (!isActive) {
     return (
-      <div className="card p-5 md:p-7 space-y-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-sage-text">
-              Voice agent
-            </h3>
-            <p className="text-sm text-sage-text-dim mt-1">
-              ElevenLabs Conversational Agent. Tools wired to the on-chain
-              vault.
-            </p>
-          </div>
+      <div className="card p-5 md:p-7">
+        <div className="flex items-center justify-end">
           <span className="pill">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-sage-text-dim" />
             {conversation.status}
           </span>
         </div>
 
-        <div className="flex flex-col items-center gap-4 py-4">
+        <div className="flex flex-col items-center gap-4 py-6">
           <Orb speaking={false} listening={false} size={144} />
           <button
             type="button"
@@ -240,25 +231,18 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           >
             ● Start talking
           </button>
-          <p className="label-mono text-center">
-            Tools · get_vault_status · find_yield · propose_deposit ·
-            pay_briefing
-          </p>
           {vaultBalance.data != null && (
-            <p className="text-xs text-sage-text-dim">
-              Vault holds{" "}
+            <button
+              type="button"
+              className="text-xs text-sage-text-dim hover:text-sage-text"
+              onClick={() => ctx?.go("vault")}
+            >
+              Vault{" "}
               <span className="num-mono text-sage-text font-semibold">
                 ${vaultBalance.data.toFixed(2)}
               </span>{" "}
-              ·{" "}
-              <button
-                type="button"
-                className="underline hover:text-sage-text"
-                onClick={() => ctx?.go("vault")}
-              >
-                view details ›
-              </button>
-            </p>
+              ›
+            </button>
           )}
         </div>
       </div>
@@ -317,10 +301,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             ● SAGE · {speaking ? "SPEAKING" : "LISTENING"}
           </p>
           <p className="text-[16px] md:text-[20px] font-medium leading-snug min-h-[2.5em]">
-            {lastAgentLine ??
-              (speaking
-                ? "…"
-                : "Try: 'what's my balance' · 'find safe USDC yield' · 'give me a briefing'")}
+            {lastAgentLine ?? (speaking ? "…" : "Listening.")}
           </p>
         </div>
       </div>

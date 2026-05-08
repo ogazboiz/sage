@@ -31,16 +31,8 @@ export function YieldList() {
 
   return (
     <div className="card p-5 md:p-7 space-y-5">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            Cross-chain yield
-          </h3>
-          <p className="text-sm text-sage-text-dim mt-1">
-            Live LI.FI Earn · ranked by your intent · bridge to any vault via
-            Composer
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-sage-text">Vaults</h3>
         <span className="pill">LI.FI Earn</span>
       </div>
 

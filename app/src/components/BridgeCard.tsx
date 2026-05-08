@@ -77,15 +77,8 @@ export function BridgeCard() {
 
   return (
     <div className="card p-5 md:p-7 space-y-5">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            Fund your vault
-          </h3>
-          <p className="text-sm text-sage-text-dim mt-1">
-            LI.FI Composer · cross-chain → Solana
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-sage-text">Fund vault</h3>
         <span className="pill">LI.FI Composer</span>
       </div>
 

@@ -65,33 +65,13 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
   if (!vaultInitialised && vaultQuery.isFetched) {
     return (
       <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="pill pill-warning">● Not ready</span>
-          <span className="label-mono">vault required</span>
-        </div>
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            You need a vault before paying
-          </h3>
-          <p className="text-sm text-sage-text-dim mt-1">
-            x402 settlement releases USDC from your Sage vault. Initialise the
-            vault first, then come back to pay 0.20 USDC for a briefing.
-          </p>
-        </div>
-        <ol className="space-y-2 text-[13px] text-sage-text-dim">
-          <li className="flex gap-2">
-            <span className="font-mono text-sage-text">1.</span>
-            <span>Go to the Vault tab and click <span className="text-sage-text font-medium">Initialise vault</span>.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="font-mono text-sage-text">2.</span>
-            <span>Deposit at least 0.20 SAGE-USDC.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="font-mono text-sage-text">3.</span>
-            <span>Return here to pay the briefing.</span>
-          </li>
-        </ol>
+        <span className="pill pill-warning">● Vault required</span>
+        <h3 className="text-base font-semibold text-sage-text">
+          Initialise a vault first.
+        </h3>
+        <p className="text-sm text-sage-text-dim">
+          The briefing settles 0.20 USDC from your Sage vault.
+        </p>
         <button
           type="button"
           onClick={() => onGoToVault?.()}
@@ -106,32 +86,30 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
   if (insufficientBalance) {
     return (
       <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="pill pill-warning">● Insufficient balance</span>
-          <span className="label-mono">need {quotedAmount.toFixed(2)} USDC</span>
-        </div>
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            Vault is empty
-          </h3>
-          <p className="text-sm text-sage-text-dim mt-1">
-            Your vault holds{" "}
-            <span className="num-mono text-sage-text">
+        <span className="pill pill-warning">● Insufficient balance</span>
+        <h3 className="text-base font-semibold text-sage-text">
+          Top up the vault.
+        </h3>
+        <div className="text-sm text-sage-text-dim space-y-1">
+          <div className="flex justify-between font-mono text-[12px]">
+            <span>Vault</span>
+            <span className="text-sage-text">
               ${vaultBalance.data?.toFixed(2) ?? "0.00"}
             </span>
-            . The briefing needs{" "}
-            <span className="num-mono text-sage-text">
+          </div>
+          <div className="flex justify-between font-mono text-[12px]">
+            <span>Needed</span>
+            <span className="text-sage-text">
               {quotedAmount.toFixed(2)} USDC
             </span>
-            . Deposit, then return here.
-          </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => onGoToVault?.()}
           className="btn btn-primary w-full"
         >
-          Go to Vault to deposit ›
+          Go to Vault ›
         </button>
       </div>
     );
@@ -141,18 +119,9 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
   if (result) {
     return (
       <div className="card p-6 space-y-5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="pill pill-accent">● Settled on-chain</span>
-          <span className="label-mono">receipt</span>
-        </div>
-
-        <div>
-          <h3 className="text-base font-semibold text-sage-text">
-            Solana DeFi briefing
-          </h3>
-          <p className="font-mono text-[11px] text-sage-text-dim mt-1 break-all">
-            {BRIEFING_URL.replace(/^https?:\/\//, "")}
-          </p>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-sage-text">Briefing</h3>
+          <span className="pill pill-accent">● Settled</span>
         </div>
 
         <div className="card bg-white p-4">
@@ -198,7 +167,7 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
           onClick={() => pay.reset()}
           className="btn w-full"
         >
-          Pay for another briefing ›
+          New briefing ›
         </button>
       </div>
     );
@@ -207,18 +176,9 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
   // QUOTE MODE — show the live 402 challenge before payment.
   return (
     <div className="card p-6 space-y-5">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-sage-text">Briefing</h3>
         <span className="pill pill-accent">● HTTP 402</span>
-        <span className="label-mono">payment required</span>
-      </div>
-
-      <div>
-        <h3 className="text-base font-semibold text-sage-text">
-          Solana DeFi briefing
-        </h3>
-        <p className="font-mono text-[11px] text-sage-text-dim mt-1 break-all">
-          {BRIEFING_URL.replace(/^https?:\/\//, "")}
-        </p>
       </div>
 
       {challenge.isLoading && (
@@ -275,8 +235,8 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
           </div>
 
           {/* Voice prompt line */}
-          <div className="flex items-start gap-3">
-            <div className="flex gap-0.5 pt-1">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-0.5">
               {[8, 14, 20, 14, 8].map((h, i) => (
                 <span
                   key={i}
@@ -286,9 +246,7 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
               ))}
             </div>
             <p className="text-[13px] italic text-sage-text leading-snug">
-              "That'll cost about{" "}
-              {Math.round(parseFloat(c.amount) * 100)} cents from your vault.
-              Continue?"
+              "{c.amount} {c.asset}. Continue?"
             </p>
           </div>
 
@@ -346,9 +304,7 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
               </div>
               {pay.stage === "awaiting-signature" && (
                 <p className="text-[11px] text-sage-warning border border-sage-warning/40 bg-sage-warning-soft rounded p-2">
-                  Open Backpack — the signature popup is waiting. If you're in
-                  Chrome's mobile preview, the popup appears outside the
-                  emulated viewport.
+                  Open your wallet to sign.
                 </p>
               )}
               <button
@@ -379,7 +335,7 @@ export function BriefingCard({ onGoToVault }: BriefingCardProps = {}) {
           )}
 
           <p className="label-mono text-center">
-            approve_task → release_step → settle on-chain → receipt
+            approve · release · settle
           </p>
         </>
       )}
