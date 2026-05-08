@@ -4,6 +4,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { BridgeCard } from "@/components/BridgeCard";
 import { BriefingCard } from "@/components/BriefingCard";
 import { DepositCard } from "@/components/DepositCard";
+import { SimpleVoice } from "@/components/SimpleVoice";
 import { VaultPanel } from "@/components/VaultPanel";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { YieldList } from "@/components/YieldList";
@@ -30,6 +31,7 @@ function App() {
         {connected && <DepositCard />}
         {connected && <BridgeCard />}
         <VoiceAgent />
+        {connected && <SimpleVoice />}
         {connected && <BriefingCard />}
         <YieldList />
       </main>
