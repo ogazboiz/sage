@@ -6,10 +6,6 @@ import {
   WalletProvider as SolanaWalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -22,13 +18,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return clusterApiUrl(NETWORK);
   }, []);
 
-  // PhantomWalletAdapter and SolflareWalletAdapter both register themselves via
-  // the wallet-standard protocol. Listing them explicitly ensures they show up
-  // even if the standard auto-detection misses them on some setups.
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    [],
-  );
+  // Empty wallets array on purpose. Phantom, Solflare, Backpack, and other
+  // modern Solana wallets register themselves via the wallet-standard
+  // protocol — the adapter picks them up automatically. Listing legacy
+  // PhantomWalletAdapter / SolflareWalletAdapter explicitly causes them to
+  // bind to the deprecated window.solana path which Phantom's current build
+  // actively rejects ("WalletConnectionError: Connection rejected").
+  const wallets = useMemo(() => [], []);
 
   // Surface the actual underlying error rather than the generic "Unexpected
   // error" the adapter swallows.
