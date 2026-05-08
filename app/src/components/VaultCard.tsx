@@ -23,9 +23,15 @@ function compactUsd(n: number): string {
 export function VaultCard({
   vault,
   rank,
+  onDeploy,
+  deployLabel,
+  deployDisabled,
 }: {
   vault: RankedVault;
   rank?: number;
+  onDeploy?: () => void;
+  deployLabel?: string;
+  deployDisabled?: boolean;
 }) {
   const symbols = vault.underlyingTokens.map((u) => u.symbol).join(" / ");
 
@@ -73,11 +79,23 @@ export function VaultCard({
           </div>
         )}
       </div>
-      <div className="text-right shrink-0">
-        <p className="num-mono text-2xl font-bold text-sage-text leading-none">
-          {pct(vault.apyTotal)}
-        </p>
-        <p className="label-mono mt-1">APY</p>
+      <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="text-right">
+          <p className="num-mono text-2xl font-bold text-sage-text leading-none">
+            {pct(vault.apyTotal)}
+          </p>
+          <p className="label-mono mt-1">APY</p>
+        </div>
+        {onDeploy && (
+          <button
+            type="button"
+            onClick={onDeploy}
+            disabled={deployDisabled}
+            className="btn btn-sm btn-primary"
+          >
+            {deployLabel ?? "Deploy"}
+          </button>
+        )}
       </div>
     </div>
   );

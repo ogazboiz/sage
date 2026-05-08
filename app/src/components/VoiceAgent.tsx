@@ -8,6 +8,7 @@ import {
 import { useSageProgram } from "@/hooks/useSageProgram";
 import { useSolanaVaults } from "@/hooks/useSolanaVaults";
 import { useDeposit } from "@/hooks/useDeposit";
+import { useDeployYield } from "@/hooks/useDeployYield";
 import { usePayBriefing } from "@/hooks/usePayBriefing";
 import { snapshotVault, type SageProgram } from "@/lib/sage-sdk";
 import type { ClientTools } from "@elevenlabs/react";
@@ -23,6 +24,7 @@ interface ToolDeps {
   vaultsData: ReturnType<typeof useSolanaVaults>["data"];
   deposit: ReturnType<typeof useDeposit>;
   payBriefing: ReturnType<typeof usePayBriefing>;
+  deployYield: ReturnType<typeof useDeployYield>;
 }
 
 // Voice tools cannot pop a wallet directly: the call originates inside an
@@ -32,7 +34,15 @@ interface ToolDeps {
 // user gesture the wallet needs.
 type Pending =
   | { kind: "deposit"; amount: number }
-  | { kind: "briefing" };
+  | { kind: "briefing" }
+  | {
+      kind: "yield";
+      slug: string;
+      protocol: string;
+      network: string;
+      apy: number;
+      amount: number;
+    };
 
 export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const program = useSageProgram();
@@ -46,6 +56,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   });
   const deposit = useDeposit();
   const payBriefing = usePayBriefing();
+  const deployYield = useDeployYield();
   const [transcript, setTranscript] = useState<string[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [lastDisconnect, setLastDisconnect] = useState<{
@@ -63,6 +74,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
     vaultsData: undefined,
     deposit,
     payBriefing,
+    deployYield,
   });
   useEffect(() => {
     depsRef.current = {
@@ -71,8 +83,9 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       vaultsData: vaults.data,
       deposit,
       payBriefing,
+      deployYield,
     };
-  }, [program, publicKey, vaults.data, deposit, payBriefing]);
+  }, [program, publicKey, vaults.data, deposit, payBriefing, deployYield]);
 
   const tools = useMemo<ClientTools>(() => {
     return {
@@ -136,6 +149,34 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         if (!publicKey) return "Wallet not connected.";
         setPending({ kind: "briefing" });
         return "Showed the user a confirm card for the 0.20 USDC briefing. Tell them to tap Confirm on screen, then wait for an update with the result.";
+      },
+
+      propose_yield_deposit: async (
+        params: Record<string, unknown>,
+      ) => {
+        const slug = String(params.slug ?? "").trim();
+        const num = Number(params.amount);
+        if (!slug) return "Invalid slug.";
+        if (!Number.isFinite(num) || num <= 0) return "Invalid amount.";
+        const { publicKey, vaultsData } = depsRef.current;
+        if (!publicKey) return "Wallet not connected.";
+        const match = vaultsData?.ranked.find((v) => v.slug === slug);
+        if (!match) {
+          return `Unknown yield slug ${slug}. Call find_yield first to surface ranked options.`;
+        }
+        setPending({
+          kind: "yield",
+          slug: match.slug,
+          protocol: match.protocol.name,
+          network: match.network,
+          apy: match.apyTotal,
+          amount: num,
+        });
+        return `Showed the user a confirm card for deploying ${num.toFixed(
+          2,
+        )} USDC into ${match.protocol.name} (${match.network}) at ${match.apyTotal.toFixed(
+          2,
+        )}% APY. Tell them to tap Confirm on screen, then wait for an update with the result.`;
       },
     };
     // depsRef reads always pick up the latest values, so we don't depend on
@@ -204,7 +245,8 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           </a>
           {" "}with tools <code className="font-mono">get_vault_status</code>,{" "}
           <code className="font-mono">find_yield</code>,{" "}
-          <code className="font-mono">propose_deposit</code>, and{" "}
+          <code className="font-mono">propose_deposit</code>,{" "}
+          <code className="font-mono">propose_yield_deposit</code>, and{" "}
           <code className="font-mono">pay_briefing</code>.
         </p>
       </div>
@@ -254,7 +296,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       } catch (err) {
         update = `Deposit failed: ${(err as Error).message}`;
       }
-    } else {
+    } else if (current.kind === "briefing") {
       try {
         const result = await depsRef.current.payBriefing.mutateAsync();
         update = `Briefing settled on-chain. tx ${result.signature.slice(
@@ -263,6 +305,24 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         )}…  Briefing text: ${result.briefing}`;
       } catch (err) {
         update = `Briefing failed: ${(err as Error).message}`;
+      }
+    } else {
+      try {
+        const position = await depsRef.current.deployYield.mutateAsync({
+          slug: current.slug,
+          protocol: current.protocol,
+          network: current.network,
+          amount: current.amount,
+          apy: current.apy,
+        });
+        update = `Deployed ${position.amount.toFixed(2)} USDC into ${
+          position.protocol
+        } at ${position.apy.toFixed(2)}% APY. tx ${position.signature.slice(
+          0,
+          12,
+        )}…`;
+      } catch (err) {
+        update = `Yield deploy failed: ${(err as Error).message}`;
       }
     }
     try {
@@ -292,7 +352,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   // Tool calls observed (V2 timeline) — derive from transcript message lines.
   const toolEvents = transcript.filter((line) =>
-    /(get_vault_status|find_yield|propose_deposit|pay_briefing)/.test(line),
+    /(get_vault_status|find_yield|propose_deposit|propose_yield_deposit|pay_briefing)/.test(line),
   );
 
   if (!isActive) {
@@ -396,7 +456,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
                 ● CONFIRM ON-CHAIN
               </p>
               <div>
-                {pending.kind === "deposit" ? (
+                {pending.kind === "deposit" && (
                   <>
                     <p className="text-white/70 text-[13px]">Deposit</p>
                     <p className="font-mono text-[32px] font-bold leading-none mt-1">
@@ -406,7 +466,8 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
                       USDC into your vault
                     </p>
                   </>
-                ) : (
+                )}
+                {pending.kind === "briefing" && (
                   <>
                     <p className="text-white/70 text-[13px]">Pay briefing</p>
                     <p className="font-mono text-[32px] font-bold leading-none mt-1">
@@ -417,13 +478,28 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
                     </p>
                   </>
                 )}
+                {pending.kind === "yield" && (
+                  <>
+                    <p className="text-white/70 text-[13px]">
+                      Deploy to {pending.protocol}
+                    </p>
+                    <p className="font-mono text-[32px] font-bold leading-none mt-1">
+                      ${pending.amount.toFixed(2)}
+                    </p>
+                    <p className="text-white/50 text-[11px] mt-1">
+                      {pending.network} · {pending.apy.toFixed(2)}% APY
+                    </p>
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={cancelPending}
                   disabled={
-                    deposit.isPending || payBriefing.isPending
+                    deposit.isPending ||
+                    payBriefing.isPending ||
+                    deployYield.isPending
                   }
                   className="flex-1 px-3 py-2 text-[13px] rounded-md border border-white/30 text-white/80 hover:bg-white/5 disabled:opacity-40"
                 >
@@ -433,11 +509,15 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
                   type="button"
                   onClick={confirmPending}
                   disabled={
-                    deposit.isPending || payBriefing.isPending
+                    deposit.isPending ||
+                    payBriefing.isPending ||
+                    deployYield.isPending
                   }
                   className="flex-1 px-3 py-2 text-[13px] rounded-md bg-sage-accent text-white font-medium disabled:opacity-50"
                 >
-                  {deposit.isPending || payBriefing.isPending
+                  {deposit.isPending ||
+                  payBriefing.isPending ||
+                  deployYield.isPending
                     ? "Signing…"
                     : "Confirm"}
                 </button>
@@ -472,6 +552,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             "get_vault_status",
             "find_yield",
             "propose_deposit",
+            "propose_yield_deposit",
             "pay_briefing",
           ].map((tool) => {
             const seen = toolEvents.some((e) => e.includes(tool));

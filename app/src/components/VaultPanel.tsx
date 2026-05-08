@@ -2,12 +2,14 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@solana/wallet-adapter-react";
 
+import { useDeposit } from "@/hooks/useDeposit";
 import { useSageProgram } from "@/hooks/useSageProgram";
 import { useInitVault } from "@/hooks/useInitVault";
 import {
   useOwnerUsdcBalance,
   useVaultUsdcBalance,
 } from "@/hooks/useTokenBalances";
+import { useYieldPositions } from "@/hooks/useYieldPositions";
 import {
   deriveUserVaultPda,
   fetchUserVault,
@@ -90,6 +92,8 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
   const ownerBalance = useOwnerUsdcBalance();
   const vaultBalance = useVaultUsdcBalance();
   const initVault = useInitVault();
+  const deposit = useDeposit();
+  const { positions, totalDeployed, remove } = useYieldPositions();
 
   const balanceUsd = vaultBalance.data ?? 0;
   const totalDeposited = vaultQuery.data
@@ -100,7 +104,7 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
     : 0;
   const exists = Boolean(vaultQuery.data);
   const idle = balanceUsd;
-  const deployed = Math.max(totalDeposited - totalSpent - idle, 0);
+  const deployed = totalDeployed;
   const activeTask = vaultQuery.data?.activeTask ?? null;
   const taskBudgetRemaining = activeTask
     ? Number(activeTask.budgetRemaining.toString()) / 1_000_000
@@ -186,6 +190,67 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
           <p className="text-xs text-sage-danger break-all">
             {(initVault.error as Error).message}
           </p>
+        )}
+
+        {/* Yield positions */}
+        {positions.length > 0 && (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-baseline justify-between">
+              <p className="label-mono">Yield positions</p>
+              <span className="num-mono text-[11px] text-sage-text">
+                ${totalDeployed.toFixed(2)} deployed
+              </span>
+            </div>
+            <div className="space-y-2">
+              {positions.map((p) => (
+                <div
+                  key={p.signature}
+                  className="flex items-center gap-3 py-2 row-divider"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-sage-text leading-tight">
+                      {p.protocol}{" "}
+                      <span className="num-mono text-[11px] text-sage-text-dim font-normal">
+                        · {p.apy.toFixed(2)}%
+                      </span>
+                    </p>
+                    <a
+                      href={txUrl(p.signature)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[10px] text-sage-text-dim hover:text-sage-accent"
+                    >
+                      {p.network} · tx {p.signature.slice(0, 6)}…
+                      {p.signature.slice(-4)}
+                    </a>
+                  </div>
+                  <span className="num-mono text-[13px] text-sage-text">
+                    ${p.amount.toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={deposit.isPending}
+                    onClick={async () => {
+                      try {
+                        await deposit.mutateAsync(p.amount);
+                        remove(p.signature);
+                      } catch {
+                        /* error handled by mutation state */
+                      }
+                    }}
+                    className="btn btn-sm"
+                  >
+                    Recall
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-sage-text-dim leading-relaxed">
+              Sage released this USDC from the vault to your wallet, tagged
+              with the protocol slug in the on-chain memo. Recall deposits it
+              back into the vault.
+            </p>
+          </div>
         )}
 
         {/* Active task */}
