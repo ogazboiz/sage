@@ -10,25 +10,51 @@ import { VaultPanel } from "@/components/VaultPanel";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { YieldList } from "@/components/YieldList";
 
-type Screen = "vault" | "yield" | "voice" | "bridge";
+type Screen = "vault" | "yield" | "voice" | "bridge" | "briefing";
 
-const SCREENS: { key: Screen; label: string }[] = [
-  { key: "vault", label: "Vault" },
-  { key: "yield", label: "Yield" },
-  { key: "voice", label: "Voice" },
-  { key: "bridge", label: "Bridge" },
+const SCREENS: { key: Screen; n: string; label: string; blurb: string }[] = [
+  {
+    key: "vault",
+    n: "02",
+    label: "Vault",
+    blurb: "Balance, active task, ledger. Where you live.",
+  },
+  {
+    key: "yield",
+    n: "03",
+    label: "Yield",
+    blurb: "LI.FI Earn → ranked vaults across chains.",
+  },
+  {
+    key: "voice",
+    n: "04",
+    label: "Voice",
+    blurb: "ElevenLabs Conversational Agent — mic, transcript, tool calls.",
+  },
+  {
+    key: "bridge",
+    n: "05",
+    label: "Bridge",
+    blurb: "LI.FI Composer · fund the vault from any chain.",
+  },
+  {
+    key: "briefing",
+    n: "06",
+    label: "Briefing",
+    blurb: "x402 paid task · voice → quote → on-chain settlement.",
+  },
 ];
 
-const SCREEN_BLURB: Record<Screen, string> = {
-  vault: "Balance, active task, and the on-chain ledger.",
-  yield: "Live LI.FI Earn vaults, ranked by your intent.",
-  voice: "ElevenLabs Conversational Agent with on-chain tool calls.",
-  bridge: "LI.FI Composer · cross-chain funding into your vault.",
-};
+interface ScreenContext {
+  go: (s: Screen) => void;
+}
 
 function App() {
   const { connected } = useWallet();
   const [screen, setScreen] = useState<Screen>("vault");
+  const ctx: ScreenContext = { go: setScreen };
+
+  const current = SCREENS.find((s) => s.key === screen)!;
 
   return (
     <div className="min-h-full">
@@ -73,15 +99,18 @@ function App() {
         </main>
       ) : (
         <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
-          {/* Screen header */}
+          {/* Screen header — section number + title + blurb, like wireframe section heads */}
           <div className="flex items-baseline justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
-                {SCREENS.find((s) => s.key === screen)?.label}
-              </h2>
-              <p className="text-sm text-sage-text-dim mt-1">
-                {SCREEN_BLURB[screen]}
-              </p>
+            <div className="flex items-baseline gap-3">
+              <span className="font-mono text-[11px] tracking-widest text-sage-text-dim">
+                {current.n}
+              </span>
+              <div>
+                <h2 className="text-[22px] font-semibold text-sage-text tracking-[-0.01em]">
+                  {current.label}
+                </h2>
+                <p className="text-sm text-sage-text-dim">{current.blurb}</p>
+              </div>
             </div>
 
             {/* Mobile screen switcher */}
@@ -91,7 +120,7 @@ function App() {
                   key={s.key}
                   type="button"
                   onClick={() => setScreen(s.key)}
-                  className={`px-3 py-1 text-[12px] ${
+                  className={`px-2.5 py-1 text-[11px] ${
                     screen === s.key
                       ? "bg-sage-text text-white"
                       : "bg-white text-sage-text"
@@ -106,11 +135,8 @@ function App() {
           {/* Active screen */}
           {screen === "vault" && (
             <div className="space-y-6">
-              <VaultPanel />
-              <div className="grid md:grid-cols-2 gap-6">
-                <DepositCard />
-                <BriefingCard />
-              </div>
+              <VaultPanel ctx={ctx} />
+              <DepositCard />
             </div>
           )}
 
@@ -119,6 +145,8 @@ function App() {
           {screen === "voice" && <VoiceAgent />}
 
           {screen === "bridge" && <BridgeCard />}
+
+          {screen === "briefing" && <BriefingCard />}
 
           <footer className="pt-10 pb-6 text-[11px] text-sage-text-dim font-mono flex flex-wrap gap-x-4 gap-y-1">
             <span>devnet</span>
@@ -148,3 +176,4 @@ function App() {
 }
 
 export default App;
+export type { Screen, ScreenContext };

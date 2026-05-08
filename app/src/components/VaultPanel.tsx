@@ -14,6 +14,7 @@ import {
   PROGRAM_ID_STRING,
   SAGE_USDC_MINT,
 } from "@/lib/sage-sdk";
+import type { ScreenContext } from "@/App";
 
 function explorerUrl(addr: string): string {
   return `https://solscan.io/account/${addr}?cluster=devnet`;
@@ -68,7 +69,7 @@ function TxRow({
   );
 }
 
-export function VaultPanel() {
+export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
   const { publicKey } = useWallet();
   const program = useSageProgram();
 
@@ -143,9 +144,13 @@ export function VaultPanel() {
             </button>
           ) : (
             <>
-              <a className="btn btn-primary" href="#bridge">
+              <button
+                type="button"
+                onClick={() => ctx?.go("bridge")}
+                className="btn btn-primary"
+              >
                 + Fund
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => vaultQuery.refetch()}
@@ -153,9 +158,13 @@ export function VaultPanel() {
               >
                 Refresh
               </button>
-              <a className="btn" href="#yield">
+              <button
+                type="button"
+                onClick={() => ctx?.go("yield")}
+                className="btn"
+              >
                 Find yield ›
-              </a>
+              </button>
             </>
           )}
         </div>
