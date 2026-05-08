@@ -25,6 +25,15 @@ interface ToolDeps {
   payBriefing: ReturnType<typeof usePayBriefing>;
 }
 
+// Voice tools cannot pop a wallet directly: the call originates inside an
+// ElevenLabs websocket message handler, and browsers strip the user-gesture
+// flag from that call stack, so wallet adapters reject the connect/sign
+// prompt. The agent proposes, the user clicks Confirm, and the click is the
+// user gesture the wallet needs.
+type Pending =
+  | { kind: "deposit"; amount: number }
+  | { kind: "briefing" };
+
 export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const program = useSageProgram();
   const { publicKey } = useWallet();
@@ -38,6 +47,8 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const deposit = useDeposit();
   const payBriefing = usePayBriefing();
   const [transcript, setTranscript] = useState<string[]>([]);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const pendingResolverRef = useRef<((s: string) => void) | null>(null);
 
   // The ElevenLabs SDK captures the clientTools closure at session start, so a
   // stale closure can read publicKey=null even after the wallet connects mid
@@ -105,30 +116,21 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         if (!Number.isFinite(num) || num <= 0) {
           return "Invalid amount.";
         }
-        const { program, publicKey, deposit } = depsRef.current;
-        if (!program || !publicKey) {
-          return "Wallet not connected.";
-        }
-        try {
-          const sig = await deposit.mutateAsync(num);
-          return `Deposited ${num.toFixed(2)} SAGE-USDC. Tx ${sig.slice(0, 12)}…`;
-        } catch (err) {
-          return `Deposit failed: ${(err as Error).message}`;
-        }
+        const { publicKey } = depsRef.current;
+        if (!publicKey) return "Wallet not connected.";
+        return await new Promise<string>((resolve) => {
+          pendingResolverRef.current = resolve;
+          setPending({ kind: "deposit", amount: num });
+        });
       },
 
       pay_briefing: async () => {
-        const { program, publicKey, payBriefing } = depsRef.current;
-        if (!program || !publicKey) return "Wallet not connected.";
-        try {
-          const result = await payBriefing.mutateAsync();
-          return JSON.stringify({
-            briefing: result.briefing,
-            signature: result.signature,
-          });
-        } catch (err) {
-          return `Briefing payment failed: ${(err as Error).message}`;
-        }
+        const { publicKey } = depsRef.current;
+        if (!publicKey) return "Wallet not connected.";
+        return await new Promise<string>((resolve) => {
+          pendingResolverRef.current = resolve;
+          setPending({ kind: "briefing" });
+        });
       },
     };
     // depsRef reads always pick up the latest values, so we don't depend on
@@ -147,6 +149,11 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         ...prev.slice(-9),
         `error: ${typeof err === "string" ? err : JSON.stringify(err)}`,
       ]);
+    },
+    onDisconnect: () => {
+      pendingResolverRef.current?.("Session ended.");
+      pendingResolverRef.current = null;
+      setPending(null);
     },
   });
 
@@ -198,6 +205,42 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       agentId: AGENT_ID,
       connectionType: "websocket",
     });
+  }
+
+  async function confirmPending() {
+    if (!pending) return;
+    const resolve = pendingResolverRef.current;
+    pendingResolverRef.current = null;
+    if (pending.kind === "deposit") {
+      const amount = pending.amount;
+      try {
+        const sig = await depsRef.current.deposit.mutateAsync(amount);
+        resolve?.(
+          `Deposited ${amount.toFixed(2)} USDC. tx ${sig.slice(0, 12)}…`,
+        );
+      } catch (err) {
+        resolve?.(`Deposit failed: ${(err as Error).message}`);
+      }
+    } else {
+      try {
+        const result = await depsRef.current.payBriefing.mutateAsync();
+        resolve?.(
+          JSON.stringify({
+            briefing: result.briefing,
+            signature: result.signature,
+          }),
+        );
+      } catch (err) {
+        resolve?.(`Briefing failed: ${(err as Error).message}`);
+      }
+    }
+    setPending(null);
+  }
+
+  function cancelPending() {
+    pendingResolverRef.current?.("User cancelled.");
+    pendingResolverRef.current = null;
+    setPending(null);
   }
 
   // Last agent line for the subtitle bar (V1 design).
@@ -288,12 +331,67 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         </div>
 
         <div className="flex-1 flex items-center justify-center py-4">
-          <Orb
-            speaking={speaking}
-            listening={!speaking}
-            size={160}
-            dark
-          />
+          {pending ? (
+            <div className="w-full max-w-[360px] rounded-lg border border-white/20 bg-white/5 p-5 space-y-4">
+              <p className="font-mono text-[10px] tracking-widest text-white/55">
+                ● CONFIRM ON-CHAIN
+              </p>
+              <div>
+                {pending.kind === "deposit" ? (
+                  <>
+                    <p className="text-white/70 text-[13px]">Deposit</p>
+                    <p className="font-mono text-[32px] font-bold leading-none mt-1">
+                      ${pending.amount.toFixed(2)}
+                    </p>
+                    <p className="text-white/50 text-[11px] mt-1">
+                      USDC into your vault
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white/70 text-[13px]">Pay briefing</p>
+                    <p className="font-mono text-[32px] font-bold leading-none mt-1">
+                      $0.20
+                    </p>
+                    <p className="text-white/50 text-[11px] mt-1">
+                      x402 settle from vault
+                    </p>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={cancelPending}
+                  disabled={
+                    deposit.isPending || payBriefing.isPending
+                  }
+                  className="flex-1 px-3 py-2 text-[13px] rounded-md border border-white/30 text-white/80 hover:bg-white/5 disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmPending}
+                  disabled={
+                    deposit.isPending || payBriefing.isPending
+                  }
+                  className="flex-1 px-3 py-2 text-[13px] rounded-md bg-sage-accent text-white font-medium disabled:opacity-50"
+                >
+                  {deposit.isPending || payBriefing.isPending
+                    ? "Signing…"
+                    : "Confirm"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <Orb
+              speaking={speaking}
+              listening={!speaking}
+              size={160}
+              dark
+            />
+          )}
         </div>
 
         <div className="border-t border-white/15 pt-4 md:pt-5">
