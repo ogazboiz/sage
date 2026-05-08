@@ -54,10 +54,11 @@ export function VoiceAgent() {
         if (!data) return "Vault data still loading.";
         const top = data.ranked.slice(0, 3).map((v) => ({
           slug: v.slug,
-          protocol: v.protocol,
-          underlying: v.underlying.map((u) => u.symbol).join("/"),
-          apy: v.analytics.apy.total.toFixed(2),
-          tvl: v.analytics.tvl.usd,
+          protocol: v.protocol.name,
+          chain: v.network,
+          underlying: v.underlyingTokens.map((u) => u.symbol).join("/"),
+          apy: v.apyTotal.toFixed(2),
+          tvlUsd: Math.round(v.tvlUsd),
           risk: v.riskTier,
         }));
         return JSON.stringify({

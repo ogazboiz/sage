@@ -27,6 +27,16 @@ const ALLOWED: Record<RiskTier, RiskTier[]> = {
   "high-risk": ["ok", "caution", "high-risk"],
 };
 
+function tvlNumber(v: EarnVault): number {
+  const raw = v.analytics.tvl.usd;
+  const n = typeof raw === "string" ? parseFloat(raw) : raw;
+  return Number.isFinite(n) ? n : 0;
+}
+
+function apyNumber(v: EarnVault): number {
+  return v.analytics.apy.total ?? 0;
+}
+
 export function rankVaultsForIntent(
   vaults: EarnVault[],
   intent: RankIntent,
@@ -41,21 +51,25 @@ export function rankVaultsForIntent(
   for (const v of vaults) {
     if (intent.targetChainId && v.chainId !== intent.targetChainId) continue;
     if (intent.targetSymbol) {
-      const ok = v.underlying.some((u) =>
+      const ok = v.underlyingTokens.some((u) =>
         symbolMatches(intent.targetSymbol!, u.symbol),
       );
       if (!ok) continue;
     }
-    if (intent.minApy != null && v.analytics.apy.total < intent.minApy) continue;
-    if (intent.maxApy != null && v.analytics.apy.total > intent.maxApy) continue;
-    if (intent.minTvlUsd != null && v.analytics.tvl.usd < intent.minTvlUsd)
-      continue;
+    const apy = apyNumber(v);
+    const tvl = tvlNumber(v);
+    if (intent.minApy != null && apy < intent.minApy) continue;
+    if (intent.maxApy != null && apy > intent.maxApy) continue;
+    if (intent.minTvlUsd != null && tvl < intent.minTvlUsd) continue;
     if (
       intent.includeProtocols?.length &&
-      !intent.includeProtocols.includes(v.protocol)
+      !intent.includeProtocols.includes(v.protocol.name)
     )
       continue;
-    if (intent.excludeProtocols?.length && intent.excludeProtocols.includes(v.protocol))
+    if (
+      intent.excludeProtocols?.length &&
+      intent.excludeProtocols.includes(v.protocol.name)
+    )
       continue;
     if (v.isTransactional === false) continue;
 
@@ -66,28 +80,26 @@ export function rankVaultsForIntent(
       ...v,
       riskTier: tier,
       cautions: getCautionReasons(v),
+      apyTotal: apy,
+      tvlUsd: tvl,
     });
   }
 
   const objective = intent.objective ?? "balanced";
   filtered.sort((a, b) => {
     if (objective === "safest") {
-      return b.analytics.tvl.usd - a.analytics.tvl.usd;
+      return b.tvlUsd - a.tvlUsd;
     }
     if (objective === "highest") {
-      return b.analytics.apy.total - a.analytics.apy.total;
+      return b.apyTotal - a.apyTotal;
     }
-    // balanced: 55% APY weight, 45% TVL weight, normalised against max
-    const maxApy = Math.max(...filtered.map((v) => v.analytics.apy.total), 1);
-    const maxTvl = Math.max(...filtered.map((v) => v.analytics.tvl.usd), 1);
+    const maxApy = Math.max(...filtered.map((v) => v.apyTotal), 1);
+    const maxTvl = Math.max(...filtered.map((v) => v.tvlUsd), 1);
     const score = (v: RankedVault) =>
-      0.55 * (v.analytics.apy.total / maxApy) +
-      0.45 * (v.analytics.tvl.usd / maxTvl);
+      0.55 * (v.apyTotal / maxApy) + 0.45 * (v.tvlUsd / maxTvl);
     return score(b) - score(a);
   });
 
-  // Protocol diversity cap when there's no specific symbol target,
-  // otherwise the listing collapses to "10 Aave vaults".
   const limit = intent.resultCount ?? DEFAULT_RESULTS;
   if (intent.targetSymbol) {
     return filtered.slice(0, limit);
@@ -95,9 +107,9 @@ export function rankVaultsForIntent(
   const counts = new Map<string, number>();
   const out: RankedVault[] = [];
   for (const v of filtered) {
-    const used = counts.get(v.protocol) ?? 0;
+    const used = counts.get(v.protocol.name) ?? 0;
     if (used >= PROTOCOL_DIVERSITY_CAP) continue;
-    counts.set(v.protocol, used + 1);
+    counts.set(v.protocol.name, used + 1);
     out.push(v);
     if (out.length >= limit) break;
   }

@@ -33,10 +33,10 @@ export function YieldList() {
     <section className="space-y-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-xl font-semibold text-sage-text">
-          Solana yield
+          Cross-chain yield
         </h2>
         <p className="text-xs text-sage-text-dim">
-          Live from LI.FI Earn
+          Live from LI.FI Earn · bridge to any vault via Composer
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export function YieldList() {
       {query.data && (
         <>
           <p className="text-xs text-sage-text-dim">
-            {query.data.ranked.length} ranked / {query.data.all.length} on Solana
+            {query.data.ranked.length} ranked / {query.data.all.length} across chains
           </p>
           <div className="space-y-3">
             {query.data.ranked.map((vault) => (

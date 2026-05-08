@@ -37,15 +37,13 @@ export async function fetchEarnVaults(
   return res.json();
 }
 
-export async function fetchAllSolanaVaults(
+export async function fetchAllEarnVaults(
   options: { signal?: AbortSignal; minTvlUsd?: number } = {},
 ): Promise<EarnVault[]> {
   const all: EarnVault[] = [];
   let cursor: string | undefined;
-  // Cap the walk so a stuck cursor doesn't loop forever.
   for (let i = 0; i < 20; i++) {
     const page = await fetchEarnVaults({
-      chainId: LIFI_SOLANA_CHAIN_ID,
       cursor,
       minTvlUsd: options.minTvlUsd,
       signal: options.signal,
@@ -56,3 +54,6 @@ export async function fetchAllSolanaVaults(
   }
   return all;
 }
+
+// Backwards alias kept until other call sites are updated.
+export const fetchAllSolanaVaults = fetchAllEarnVaults;

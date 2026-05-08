@@ -1,49 +1,54 @@
 // Subset of the LI.FI Earn API response shape we actually use.
-// See https://docs.li.fi for the full schema.
+// See https://earn.li.fi/v1/vaults
 
 export interface EarnApy {
-  base: number;
-  reward: number;
-  total: number;
-}
-
-export interface EarnApyHistory {
-  d1?: number;
-  d7?: number;
-  d30?: number;
+  base: number | null;
+  reward: number | null;
+  total: number | null;
 }
 
 export interface EarnTvl {
-  usd: number;
+  // API returns a string. We normalise to number in the ranker.
+  usd: string;
 }
 
 export interface EarnAnalytics {
   apy: EarnApy;
-  apyHistory?: EarnApyHistory;
+  apy1d?: number | null;
+  apy7d?: number | null;
+  apy30d?: number | null;
   tvl: EarnTvl;
 }
 
-export interface EarnTokenRef {
+export interface EarnUnderlyingToken {
   symbol: string;
   address: string;
-  chainId: number;
   decimals: number;
+}
+
+export interface EarnProtocol {
+  name: string;
+  url?: string;
 }
 
 export interface EarnVault {
   slug: string;
   name: string;
-  protocol: string;
   chainId: number;
-  underlying: EarnTokenRef[];
+  network: string;
+  address: string;
+  tags?: string[];
+  protocol: EarnProtocol;
+  underlyingTokens: EarnUnderlyingToken[];
   analytics: EarnAnalytics;
-  metadata?: Record<string, unknown>;
   isTransactional?: boolean;
+  isRedeemable?: boolean;
 }
 
 export interface EarnVaultsResponse {
   data: EarnVault[];
   nextCursor?: string;
+  total?: number;
 }
 
 export type CautionReason =
@@ -57,4 +62,6 @@ export type RiskTier = "ok" | "caution" | "high-risk";
 export interface RankedVault extends EarnVault {
   riskTier: RiskTier;
   cautions: CautionReason[];
+  apyTotal: number;
+  tvlUsd: number;
 }

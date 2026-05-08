@@ -7,8 +7,8 @@ const CAUTION_LABEL: Record<CautionReason, string> = {
   "micro-tvl": "micro tvl",
 };
 
-function pct(n: number): string {
-  if (!Number.isFinite(n)) return "—";
+function pct(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
   return `${n.toFixed(2)}%`;
 }
 
@@ -22,8 +22,7 @@ function compactUsd(n: number): string {
 
 export function VaultCard({ vault }: { vault: RankedVault }) {
   const apy = vault.analytics.apy;
-  const tvl = vault.analytics.tvl;
-  const symbols = vault.underlying.map((u) => u.symbol).join(" / ");
+  const symbols = vault.underlyingTokens.map((u) => u.symbol).join(" / ");
 
   const tierClass =
     vault.riskTier === "high-risk"
@@ -33,13 +32,11 @@ export function VaultCard({ vault }: { vault: RankedVault }) {
         : "border-sage-border bg-sage-surface";
 
   return (
-    <div
-      className={`rounded-xl border p-5 space-y-3 ${tierClass}`}
-    >
+    <div className={`rounded-xl border p-5 space-y-3 ${tierClass}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-widest text-sage-text-dim">
-            {vault.protocol}
+            {vault.protocol.name} · {vault.network}
           </p>
           <h3 className="text-lg font-semibold text-sage-text">
             {symbols}{" "}
@@ -53,22 +50,20 @@ export function VaultCard({ vault }: { vault: RankedVault }) {
             APY
           </p>
           <p className="text-2xl font-bold text-sage-text">
-            {pct(apy.total)}
+            {pct(vault.apyTotal)}
           </p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3 text-xs text-sage-text-dim">
         <span>
-          Base{" "}
-          <span className="text-sage-text">{pct(apy.base)}</span>
+          Base <span className="text-sage-text">{pct(apy.base)}</span>
         </span>
         <span>
-          Reward{" "}
-          <span className="text-sage-text">{pct(apy.reward)}</span>
+          Reward <span className="text-sage-text">{pct(apy.reward)}</span>
         </span>
         <span>
-          TVL <span className="text-sage-text">{compactUsd(tvl.usd)}</span>
+          TVL <span className="text-sage-text">{compactUsd(vault.tvlUsd)}</span>
         </span>
       </div>
 

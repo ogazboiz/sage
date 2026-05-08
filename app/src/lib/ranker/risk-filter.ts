@@ -1,19 +1,38 @@
-import type { CautionReason, EarnVault, RiskTier } from "@/lib/lifi/types";
+import type {
+  CautionReason,
+  EarnVault,
+  RiskTier,
+} from "@/lib/lifi/types";
 
 const HIGH_RISK_APY = 250;
 const HIGH_RISK_TVL = 2_000_000;
 
+function safeApy(vault: EarnVault): number {
+  return vault.analytics.apy.total ?? 0;
+}
+
+function safeReward(vault: EarnVault): number {
+  return vault.analytics.apy.reward ?? 0;
+}
+
+function safeTvl(vault: EarnVault): number {
+  const raw = vault.analytics.tvl.usd;
+  const n = typeof raw === "string" ? parseFloat(raw) : raw;
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function getCautionReasons(vault: EarnVault): CautionReason[] {
   const reasons: CautionReason[] = [];
-  const { apy, tvl } = vault.analytics;
+  const total = safeApy(vault);
+  const reward = safeReward(vault);
 
-  if (apy.total > 0 && apy.reward / apy.total > 0.6) {
+  if (total > 0 && reward / total > 0.6) {
     reasons.push("reward-heavy");
   }
 
-  const apy1d = vault.analytics.apyHistory?.d1 ?? apy.total;
-  const apy7d = vault.analytics.apyHistory?.d7 ?? apy.total;
-  const apy30d = vault.analytics.apyHistory?.d30 ?? apy.total;
+  const apy1d = vault.analytics.apy1d ?? total;
+  const apy7d = vault.analytics.apy7d ?? total;
+  const apy30d = vault.analytics.apy30d ?? total;
 
   if (apy30d > 0 && apy1d > apy30d * 3) {
     reasons.push("apy-spike");
@@ -28,7 +47,7 @@ export function getCautionReasons(vault: EarnVault): CautionReason[] {
     reasons.push("declining-yield");
   }
 
-  if (tvl.usd < 250_000) {
+  if (safeTvl(vault) < 250_000) {
     reasons.push("micro-tvl");
   }
 
@@ -36,8 +55,8 @@ export function getCautionReasons(vault: EarnVault): CautionReason[] {
 }
 
 export function classifyRisk(vault: EarnVault): RiskTier {
-  const apy = vault.analytics.apy.total;
-  const tvl = vault.analytics.tvl.usd;
+  const apy = safeApy(vault);
+  const tvl = safeTvl(vault);
   if (apy > HIGH_RISK_APY && tvl < HIGH_RISK_TVL) {
     return "high-risk";
   }
