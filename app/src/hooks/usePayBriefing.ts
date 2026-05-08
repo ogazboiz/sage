@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useConnection,
@@ -45,19 +46,28 @@ function taskIdFromNonce(nonce: string): Uint8Array {
   return buf;
 }
 
+export type PayStage =
+  | "idle"
+  | "fetching-quote"
+  | "awaiting-signature"
+  | "confirming"
+  | "verifying";
+
 export function usePayBriefing() {
   const program = useSageProgram();
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
+  const [stage, setStage] = useState<PayStage>("idle");
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (): Promise<{
       briefing: string;
       signature: string;
     }> => {
       if (!program || !publicKey) throw new Error("Connect a wallet first");
 
+      setStage("fetching-quote");
       const challenge = await fetchChallenge(BRIEFING_URL);
       const recipient = new PublicKey(challenge.recipient);
       const recipientAta = getAssociatedTokenAddressSync(
@@ -108,26 +118,34 @@ export function usePayBriefing() {
       tx.add(memoIx(challenge.nonce));
       tx.add(completeIx);
 
+      setStage("awaiting-signature");
       const signature = await sendTransaction(tx, connection);
+
+      setStage("confirming");
       const latest = await connection.getLatestBlockhash();
       await connection.confirmTransaction(
         { signature, ...latest },
         "confirmed",
       );
 
+      setStage("verifying");
       const result = await settleAndFetch<{ briefing: string }>(
         BRIEFING_URL,
         signature,
         challenge.nonce,
       );
+      setStage("idle");
       return {
         briefing: result.briefing ?? "(no briefing returned)",
         signature,
       };
     },
+    onError: () => setStage("idle"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sage-vault"] });
       queryClient.invalidateQueries({ queryKey: ["vault-balance"] });
     },
   });
+
+  return { ...mutation, stage };
 }

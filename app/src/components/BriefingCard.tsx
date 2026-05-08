@@ -184,27 +184,91 @@ export function BriefingCard() {
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={pay.isPending}
-              onClick={() => challenge.refetch()}
-              className="btn"
-            >
-              {challenge.isFetching ? "Refreshing…" : "Refresh quote"}
-            </button>
-            <button
-              type="button"
-              onClick={() => pay.mutate()}
-              disabled={pay.isPending}
-              className="btn btn-primary"
-            >
-              {pay.isPending
-                ? "Settling…"
-                : `Yes, pay ${c.amount}`}
-            </button>
-          </div>
+          {/* Pending stage indicator */}
+          {pay.isPending ? (
+            <div className="card bg-white p-4 space-y-3">
+              <p className="label-mono">Settling on-chain…</p>
+              <div className="space-y-1.5 text-[12px] font-mono">
+                {[
+                  ["fetching-quote", "Fetching quote"],
+                  ["awaiting-signature", "Waiting for wallet signature"],
+                  ["confirming", "Confirming on-chain"],
+                  ["verifying", "Verifying with x402 service"],
+                ].map(([key, label]) => {
+                  const stages: Record<string, number> = {
+                    "fetching-quote": 0,
+                    "awaiting-signature": 1,
+                    confirming: 2,
+                    verifying: 3,
+                  };
+                  const idx = stages[key]!;
+                  const cur = stages[pay.stage] ?? -1;
+                  const done = idx < cur;
+                  const active = idx === cur;
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center gap-2"
+                    >
+                      <span
+                        className={
+                          done
+                            ? "text-sage-accent"
+                            : active
+                              ? "text-sage-text"
+                              : "text-sage-text-faint"
+                        }
+                      >
+                        {done ? "✓" : active ? "●" : "○"}
+                      </span>
+                      <span
+                        className={
+                          done
+                            ? "text-sage-text-dim"
+                            : active
+                              ? "text-sage-text font-medium"
+                              : "text-sage-text-faint"
+                        }
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {pay.stage === "awaiting-signature" && (
+                <p className="text-[11px] text-sage-warning border border-sage-warning/40 bg-sage-warning-soft rounded p-2">
+                  Open Backpack — the signature popup is waiting. If you're in
+                  Chrome's mobile preview, the popup appears outside the
+                  emulated viewport.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => pay.reset()}
+                className="btn w-full text-[12px]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => challenge.refetch()}
+                className="btn"
+              >
+                {challenge.isFetching ? "Refreshing…" : "Refresh quote"}
+              </button>
+              <button
+                type="button"
+                onClick={() => pay.mutate()}
+                className="btn btn-primary"
+              >
+                Yes, pay {c.amount}
+              </button>
+            </div>
+          )}
 
           <p className="label-mono text-center">
             approve_task → release_step → settle on-chain → receipt

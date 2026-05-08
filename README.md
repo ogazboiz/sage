@@ -89,7 +89,7 @@ Service: [`services/briefing`](services/briefing) (Express, runs at `:3001`)
 Flow:
 
 1. `POST /brief` without payment → `402` with `{ amount, mint, recipient, nonce, expiresIn }`
-2. Client sends an SPL USDC transfer to the treasury ATA, with the nonce written into a `spl-memo` instruction in the same transaction
+2. Client sends an SPL USDC transfer to the treasury ATA, with the nonce written into a `spl-memo` instruction **in the same transaction** as the vault PDA's `approve_task → release_step → complete_task` Anchor calls. This atomic flow keeps the agent's wallet at $0 between steps — the property that makes Sage trustless.
 3. Client retries with `X-Payment: <signature>` and `X-Payment-Nonce: <nonce>`
 4. Server verifies on-chain via `getParsedTransaction`, matches recipient ATA, amount, and memo nonce
 5. Returns the briefing text
@@ -99,6 +99,10 @@ Replay protection: each nonce is single-use, tracked in memory with TTL.
 End-to-end test in [`services/briefing/scripts/x402-test.ts`](services/briefing/scripts/x402-test.ts) settles 0.20 USDC on devnet and returns the briefing.
 
 **Verification tx (devnet):** [`25x87eRE5ni2hVi1rfUbobmiJFtPnwhAFfeGe92RpjA3kxgRfwuh9WtWLU2xSGKgraos66sZn55FeJVqiCupktx2`](https://solscan.io/tx/25x87eRE5ni2hVi1rfUbobmiJFtPnwhAFfeGe92RpjA3kxgRfwuh9WtWLU2xSGKgraos66sZn55FeJVqiCupktx2?cluster=devnet)
+
+### Faremeter compatibility
+
+The Solana Foundation's listed x402 stack on [solana.com/x402](https://solana.com/x402) includes **[Faremeter](https://github.com/faremeter/faremeter)** — an OSS framework for agentic payments. Sage runs a custom `x402-solana` scheme that follows the same protocol shape (HTTP 402 challenge → SPL transfer → on-chain verification → 200 with content). We implemented our own verifier rather than adopting Faremeter's facilitator architecture for one reason: Faremeter's `exact` scheme expects a plain SPL transfer that the facilitator constructs, which would force our `approve_task → release_step → complete_task` Anchor flow to be split across pre/post-payment hooks. That breaks the property the project pitch is built on — that the agent's wallet holds $0 between steps. Migration to Faremeter is a half-day refactor post-hackathon: replace the Express handler with `@faremeter/middleware`, run the bundled facilitator, and restructure the vault calls into pre/post-payment hooks (or write a custom Faremeter scheme that wraps the atomic transaction).
 
 ## LI.FI integration
 
@@ -125,11 +129,24 @@ The voice agent acts as the orchestrator, with on-chain actions enforced by the 
 |---|---|
 | Solana program | Anchor 1.0 |
 | Frontend | Vite + React 19 + Tailwind v4 |
-| Wallet | `@solana/wallet-adapter` (Phantom, Solflare) |
+| Wallet | `@solana/wallet-adapter` (Phantom, Solflare, Backpack via wallet-standard) |
 | LI.FI | REST proxy (`/v1/earn`, `/v1/quote`) |
 | Voice | `@elevenlabs/react` Conversational Agent |
 | x402 service | Express + `@solana/spl-token` parsed-tx verification |
 | RPC | Solana devnet (override via `VITE_SOLANA_RPC`) |
+
+## Solana ecosystem alignment
+
+The build follows the [Solana Agent Skills](https://github.com/solana-foundation/solana-dev-skill) playbook where it applies:
+
+- **Frontend with framework-kit** — single client instance, wallet-standard-first connection (Backpack / Phantom / Solflare auto-detected via the standard channel), minimal client footprint. We list zero legacy adapters in `WalletProvider`.
+- **IDL & client code generation** — Anchor's TS type emitter at `target/types/sage_vault.ts` is the source of truth for `app/src/lib/sage-sdk` instead of hand-rolled serializers.
+- **Testing strategy** — `programs/sage_vault/` ships a litesvm test plus `app/scripts/smoke-test.ts` that exercises every instruction (init → deposit → approve_task → release_step → complete_task → withdraw) against the deployed devnet program.
+- **Security checklist** — owner / agent-keypair signer gating, PDA `bump = user_vault.bump` constraints, `has_one = owner` on every state-mutating instruction, single-active-task invariant, force-complete grace window.
+- **Common errors & solutions / version compatibility** — toolchain pinned (Anchor 1.0.2, Solana CLI 3.1.14, Rust pinned by `rust-toolchain.toml`).
+- **Payments & commerce / x402** — Sage's `services/briefing` is the x402 paywall; see [`x402 paid endpoint`](#x402-paid-endpoint) above for the protocol shape and Faremeter migration plan.
+
+Skills not applied (out of scope for the demo): Confidential Transfers, Kit ↔ web3.js Interop (we sit on `@solana/web3.js` v1 throughout).
 
 ## Deployed addresses
 
