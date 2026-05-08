@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConversation } from "@elevenlabs/react";
 import {
   useConnection,
@@ -9,10 +9,19 @@ import { useSageProgram } from "@/hooks/useSageProgram";
 import { useSolanaVaults } from "@/hooks/useSolanaVaults";
 import { useDeposit } from "@/hooks/useDeposit";
 import { usePayBriefing } from "@/hooks/usePayBriefing";
-import { snapshotVault } from "@/lib/sage-sdk";
+import { snapshotVault, type SageProgram } from "@/lib/sage-sdk";
 import type { ClientTools } from "@elevenlabs/react";
+import type { PublicKey } from "@solana/web3.js";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
+
+interface ToolDeps {
+  program: SageProgram | null;
+  publicKey: PublicKey | null;
+  vaultsData: ReturnType<typeof useSolanaVaults>["data"];
+  deposit: ReturnType<typeof useDeposit>;
+  payBriefing: ReturnType<typeof usePayBriefing>;
+}
 
 export function VoiceAgent() {
   const program = useSageProgram();
@@ -27,9 +36,30 @@ export function VoiceAgent() {
   const payBriefing = usePayBriefing();
   const [transcript, setTranscript] = useState<string[]>([]);
 
+  // The ElevenLabs SDK captures the clientTools closure at session start, so a
+  // stale closure can read publicKey=null even after the wallet connects mid
+  // session. Funnel everything through a ref that we update in an effect.
+  const depsRef = useRef<ToolDeps>({
+    program: null,
+    publicKey: null,
+    vaultsData: undefined,
+    deposit,
+    payBriefing,
+  });
+  useEffect(() => {
+    depsRef.current = {
+      program,
+      publicKey,
+      vaultsData: vaults.data,
+      deposit,
+      payBriefing,
+    };
+  }, [program, publicKey, vaults.data, deposit, payBriefing]);
+
   const tools = useMemo<ClientTools>(() => {
     return {
       get_vault_status: async () => {
+        const { program, publicKey } = depsRef.current;
         if (!program || !publicKey) return "Wallet not connected.";
         const snap = await snapshotVault(program, publicKey);
         if (!snap.exists) {
@@ -50,7 +80,7 @@ export function VoiceAgent() {
       },
 
       find_yield: async ({ intent }: Record<string, unknown>) => {
-        const data = vaults.data;
+        const data = depsRef.current.vaultsData;
         if (!data) return "Vault data still loading.";
         const top = data.ranked.slice(0, 3).map((v) => ({
           slug: v.slug,
@@ -72,6 +102,7 @@ export function VoiceAgent() {
         if (!Number.isFinite(num) || num <= 0) {
           return "Invalid amount.";
         }
+        const { program, publicKey, deposit } = depsRef.current;
         if (!program || !publicKey) {
           return "Wallet not connected.";
         }
@@ -84,6 +115,7 @@ export function VoiceAgent() {
       },
 
       pay_briefing: async () => {
+        const { program, publicKey, payBriefing } = depsRef.current;
         if (!program || !publicKey) return "Wallet not connected.";
         try {
           const result = await payBriefing.mutateAsync();
@@ -96,7 +128,10 @@ export function VoiceAgent() {
         }
       },
     };
-  }, [program, publicKey, vaults.data, deposit, payBriefing]);
+    // depsRef reads always pick up the latest values, so we don't depend on
+    // them here. tools is stable for the lifetime of the session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const conversation = useConversation({
     clientTools: tools,
