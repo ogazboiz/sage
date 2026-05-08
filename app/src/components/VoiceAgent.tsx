@@ -151,22 +151,30 @@ export function VoiceAgent() {
           <button
             type="button"
             onClick={async () => {
+              // Force WebSocket transport. Without this, the SDK defaults to
+              // WebRTC/LiveKit which gets blocked by many networks at the UDP
+              // negotiation step ("LocalTrackSubscribed timeout").
               try {
                 const res = await fetch(
                   `/api/elevenlabs/v1/convai/conversation/get-signed-url?agent_id=${AGENT_ID}`,
                 );
-                if (!res.ok) {
-                  // Fall back to public agent path if signed-url fetch fails
-                  conversation.startSession({ agentId: AGENT_ID });
+                if (res.ok) {
+                  const { signed_url } = (await res.json()) as {
+                    signed_url: string;
+                  };
+                  conversation.startSession({
+                    signedUrl: signed_url,
+                    connectionType: "websocket",
+                  });
                   return;
                 }
-                const { signed_url } = (await res.json()) as {
-                  signed_url: string;
-                };
-                conversation.startSession({ signedUrl: signed_url });
               } catch {
-                conversation.startSession({ agentId: AGENT_ID });
+                // fall through to agentId path
               }
+              conversation.startSession({
+                agentId: AGENT_ID,
+                connectionType: "websocket",
+              });
             }}
             className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
