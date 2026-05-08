@@ -149,11 +149,12 @@ export function VoiceAgent() {
 
   if (!AGENT_ID) {
     return (
-      <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-2">
-        <h3 className="text-lg font-semibold text-sage-text">Voice agent</h3>
+      <div className="card p-6 space-y-2">
+        <h3 className="text-base font-semibold text-sage-text">Voice agent</h3>
         <p className="text-sm text-sage-text-dim">
-          Set <code className="text-sage-accent">VITE_ELEVENLABS_AGENT_ID</code>{" "}
-          in <code>app/.env.local</code> to enable. Create the agent at{" "}
+          Set <code className="text-sage-accent font-mono">VITE_ELEVENLABS_AGENT_ID</code>{" "}
+          in <code className="font-mono">app/.env.local</code> to enable.
+          Create the agent at{" "}
           <a
             href="https://elevenlabs.io/app/conversational-ai"
             target="_blank"
@@ -162,86 +163,144 @@ export function VoiceAgent() {
           >
             elevenlabs.io
           </a>
-          {" "}with tools <code>get_vault_status</code>,{" "}
-          <code>find_yield</code>, and <code>propose_deposit</code>.
+          {" "}with tools <code className="font-mono">get_vault_status</code>,{" "}
+          <code className="font-mono">find_yield</code>,{" "}
+          <code className="font-mono">propose_deposit</code>, and{" "}
+          <code className="font-mono">pay_briefing</code>.
         </p>
       </div>
     );
   }
 
   const isActive = conversation.status === "connected";
+  const speaking = isActive && conversation.mode === "speaking";
+
+  async function start() {
+    try {
+      const res = await fetch(
+        `/api/elevenlabs/v1/convai/conversation/get-signed-url?agent_id=${AGENT_ID}`,
+      );
+      if (res.ok) {
+        const { signed_url } = (await res.json()) as { signed_url: string };
+        conversation.startSession({
+          signedUrl: signed_url,
+          connectionType: "websocket",
+        });
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    conversation.startSession({
+      agentId: AGENT_ID,
+      connectionType: "websocket",
+    });
+  }
 
   return (
-    <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-lg font-semibold text-sage-text">Voice agent</h3>
-        <p className="text-xs text-sage-text-dim">
+    <div className="card p-7 space-y-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-sage-text">
+            Voice agent
+          </h3>
+          <p className="text-sm text-sage-text-dim mt-1">
+            ElevenLabs Conversational Agent. Tools wired to the on-chain vault.
+          </p>
+        </div>
+        <span
+          className={`pill ${
+            isActive ? "pill-accent" : ""
+          }`}
+        >
+          <span
+            className={`inline-block w-1.5 h-1.5 rounded-full ${
+              isActive ? "bg-sage-accent" : "bg-sage-text-dim"
+            }`}
+          />
           {conversation.status}
           {isActive ? ` · ${conversation.mode}` : ""}
-        </p>
+        </span>
       </div>
 
-      <div className="flex gap-3">
-        {!isActive ? (
-          <button
-            type="button"
-            onClick={async () => {
-              // Force WebSocket transport. Without this, the SDK defaults to
-              // WebRTC/LiveKit which gets blocked by many networks at the UDP
-              // negotiation step ("LocalTrackSubscribed timeout").
-              try {
-                const res = await fetch(
-                  `/api/elevenlabs/v1/convai/conversation/get-signed-url?agent_id=${AGENT_ID}`,
-                );
-                if (res.ok) {
-                  const { signed_url } = (await res.json()) as {
-                    signed_url: string;
-                  };
-                  conversation.startSession({
-                    signedUrl: signed_url,
-                    connectionType: "websocket",
-                  });
-                  return;
-                }
-              } catch {
-                // fall through to agentId path
-              }
-              conversation.startSession({
-                agentId: AGENT_ID,
-                connectionType: "websocket",
-              });
-            }}
-            className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Start talking
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => conversation.endSession()}
-            className="rounded-md border border-sage-border px-4 py-2 text-sm text-sage-text hover:bg-sage-bg"
-          >
-            End
-          </button>
-        )}
+      {/* Orb visualization */}
+      <div className="flex flex-col items-center gap-4 py-4">
+        <div className="relative w-36 h-36">
+          {[1, 0.78, 0.55].map((s, i) => (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                inset: `${(1 - s) * 72}px`,
+                borderRadius: "50%",
+                border: `1.5px solid ${
+                  i === 2 ? "var(--color-sage-accent)" : "var(--color-sage-border)"
+                }`,
+                background:
+                  i === 2 ? "var(--color-sage-accent-soft)" : "transparent",
+                opacity: i === 0 ? 0.3 : i === 1 ? 0.6 : 1,
+                transition: "all 200ms ease",
+                transform: speaking ? "scale(1.05)" : "scale(1)",
+              }}
+            />
+          ))}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="label-mono text-sage-accent">
+              {!isActive
+                ? "Sage"
+                : speaking
+                  ? "speaking"
+                  : "listening"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          {!isActive ? (
+            <button type="button" onClick={start} className="btn btn-primary btn-lg">
+              ● Start talking
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => conversation.endSession()}
+                className="btn"
+              >
+                End
+              </button>
+              <button
+                type="button"
+                onClick={() => conversation.setMuted(!conversation.isMuted)}
+                className="btn"
+              >
+                {conversation.isMuted ? "Unmute" : "Mute"}
+              </button>
+            </>
+          )}
+        </div>
+
         {isActive && (
-          <button
-            type="button"
-            onClick={() => conversation.setMuted(!conversation.isMuted)}
-            className="rounded-md border border-sage-border px-4 py-2 text-sm text-sage-text hover:bg-sage-bg"
-          >
-            {conversation.isMuted ? "Unmute" : "Mute"}
-          </button>
+          <p className="text-xs text-sage-text-dim text-center max-w-md">
+            Try: "what's my vault balance" · "find me safe USDC yield" · "give
+            me a briefing"
+          </p>
         )}
       </div>
 
       {transcript.length > 0 && (
-        <div className="rounded-md border border-sage-border bg-sage-bg p-3 max-h-40 overflow-y-auto space-y-1">
-          {transcript.map((line, i) => (
-            <p key={i} className="text-xs font-mono text-sage-text-dim">
-              {line}
-            </p>
-          ))}
+        <div className="border-t border-dashed border-sage-border-soft pt-4 space-y-2">
+          <p className="label-mono">Transcript</p>
+          <div className="bg-white border border-sage-border-soft rounded-md p-3 max-h-40 overflow-y-auto space-y-1">
+            {transcript.map((line, i) => (
+              <p
+                key={i}
+                className="text-xs font-mono text-sage-text-dim leading-relaxed"
+              >
+                {line}
+              </p>
+            ))}
+          </div>
         </div>
       )}
     </div>

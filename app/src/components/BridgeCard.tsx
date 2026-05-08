@@ -12,13 +12,8 @@ const SOURCE_CHAINS = [
   { label: "Polygon", value: 137 },
 ];
 
-// Real Solana mainnet USDC (Circle). LI.FI only routes between listed tokens,
-// so the bridge demo lands real USDC; the user's Sage devnet vault is funded
-// separately via the Deposit card. In a mainnet build, the vault would hold
-// this same mint.
 const SOLANA_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-// USDC contract addresses per chain. LI.FI uses 0x000…000 for native ETH.
 const USDC_ADDRESS_BY_CHAIN: Record<number, string> = {
   1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   8453: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
@@ -46,8 +41,6 @@ export function BridgeCard() {
         fromToken,
         toToken: SOLANA_USDC,
         fromAmount,
-        // Quote-only: use a placeholder source-chain address. For actual
-        // execution, the user's connected EVM wallet supplies this.
         fromAddress: "0x0000000000000000000000000000000000000001",
         toAddress: destinationAddr,
       });
@@ -55,23 +48,25 @@ export function BridgeCard() {
   });
 
   return (
-    <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold text-sage-text">
-          Cross-chain bridge into Solana
-        </h3>
-        <p className="text-sm text-sage-text-dim">
-          LI.FI Composer routes USDC from any source chain into Solana
-          mainnet USDC, landing in the connected wallet. Production routes
-          can target the vault PDA directly.
-        </p>
+    <div className="card p-6 space-y-5">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-semibold text-sage-text">
+            Cross-chain bridge into Solana
+          </h3>
+          <p className="text-sm text-sage-text-dim mt-1">
+            LI.FI Composer routes USDC from any source chain into Solana
+            mainnet USDC, landing in the connected wallet.
+          </p>
+        </div>
+        <span className="pill">LI.FI Composer</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-dashed border-sage-border-soft">
         <select
           value={sourceChainId}
           onChange={(e) => setSourceChainId(Number(e.target.value))}
-          className="rounded-md border border-sage-border bg-sage-bg px-3 py-2 text-sage-text"
+          className="rounded-md border border-sage-border bg-white px-3 py-2 text-sage-text"
         >
           {SOURCE_CHAINS.map((c) => (
             <option key={c.value} value={c.value}>
@@ -85,15 +80,15 @@ export function BridgeCard() {
           min="0"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-24 rounded-md border border-sage-border bg-sage-bg px-3 py-2 text-sage-text"
+          className="w-24 rounded-md border border-sage-border bg-white px-3 py-2 text-sage-text"
         />
-        <span className="text-sm text-sage-text-dim">USDC →</span>
-        <span className="text-sm text-sage-text-dim">USDC on Solana</span>
+        <span className="label-mono">USDC → USDC on Solana</span>
+        <div className="flex-1" />
         <button
           type="button"
           onClick={() => quote.mutate()}
           disabled={quote.isPending || !destinationAddr}
-          className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="btn btn-primary"
         >
           {quote.isPending ? "Quoting…" : "Get bridge quote"}
         </button>
@@ -106,45 +101,49 @@ export function BridgeCard() {
       )}
 
       {quote.data && (
-        <div className="rounded-md border border-sage-border bg-sage-bg p-3 text-xs space-y-1">
-          <p>
-            Tool:{" "}
-            <span className="text-sage-text">
+        <div className="grid grid-cols-2 gap-4 border-t border-dashed border-sage-border-soft pt-4">
+          <div>
+            <p className="label-mono mb-1">Tool</p>
+            <p className="text-sage-text font-medium">
               {quote.data.tool ?? quote.data.toolDetails?.name ?? "—"}
-            </span>
-          </p>
+            </p>
+          </div>
           {quote.data.estimate && (
             <>
-              <p>
-                Send:{" "}
-                <span className="text-sage-text">
-                  {quote.data.estimate.fromAmount}
-                </span>{" "}
-                {quote.data.action?.fromToken?.symbol ?? ""}
-              </p>
-              <p>
-                Receive:{" "}
-                <span className="text-sage-text">
-                  {quote.data.estimate.toAmount}
-                </span>{" "}
-                {quote.data.action?.toToken?.symbol ?? ""}
-              </p>
-              {quote.data.estimate.executionDuration && (
-                <p>
-                  ETA:{" "}
-                  <span className="text-sage-text">
-                    {Math.round(quote.data.estimate.executionDuration)} s
+              <div>
+                <p className="label-mono mb-1">Send</p>
+                <p className="num-mono text-sage-text">
+                  {quote.data.estimate.fromAmount}{" "}
+                  <span className="text-sage-text-dim">
+                    {quote.data.action?.fromToken?.symbol ?? ""}
                   </span>
                 </p>
+              </div>
+              <div>
+                <p className="label-mono mb-1">Receive</p>
+                <p className="num-mono text-sage-text">
+                  {quote.data.estimate.toAmount}{" "}
+                  <span className="text-sage-text-dim">
+                    {quote.data.action?.toToken?.symbol ?? ""}
+                  </span>
+                </p>
+              </div>
+              {quote.data.estimate.executionDuration && (
+                <div>
+                  <p className="label-mono mb-1">ETA</p>
+                  <p className="num-mono text-sage-text">
+                    {Math.round(quote.data.estimate.executionDuration)} s
+                  </p>
+                </div>
               )}
             </>
           )}
-          <p className="break-all">
-            To address:{" "}
-            <span className="font-mono text-sage-text">
+          <div className="col-span-2">
+            <p className="label-mono mb-1">To address</p>
+            <p className="font-mono text-xs text-sage-text break-all">
               {destinationAddr ?? "(connect wallet)"}
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
       )}
     </div>

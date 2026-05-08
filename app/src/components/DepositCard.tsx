@@ -20,19 +20,25 @@ export function DepositCard() {
     (ownerBalance.data ?? 0) >= parsed;
 
   return (
-    <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-4">
+    <div className="card p-6 space-y-4">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-lg font-semibold text-sage-text">Deposit</h3>
-        <p className="text-xs text-sage-text-dim">
-          Wallet:{" "}
-          <span className="text-sage-text">
+        <h3 className="text-base font-semibold text-sage-text">Deposit</h3>
+        <p className="label-mono">Move USDC into vault</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-[11px] font-mono">
+        <div className="border border-dashed border-sage-border-soft rounded p-2">
+          <p className="label-mono mb-1">Wallet</p>
+          <p className="num-mono text-sage-text text-base font-semibold">
             {ownerBalance.data?.toFixed(2) ?? "—"}
-          </span>{" "}
-          · Vault:{" "}
-          <span className="text-sage-text">
+          </p>
+        </div>
+        <div className="border border-dashed border-sage-border-soft rounded p-2">
+          <p className="label-mono mb-1">Vault</p>
+          <p className="num-mono text-sage-text text-base font-semibold">
             {vaultBalance.data?.toFixed(2) ?? "—"}
-          </span>
-        </p>
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -42,14 +48,14 @@ export function DepositCard() {
           min="0"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-32 rounded-md border border-sage-border bg-sage-bg px-3 py-2 text-sage-text outline-none focus:border-sage-accent"
+          className="flex-1 rounded-md border border-sage-border bg-white px-3 py-2 text-sage-text outline-none focus:border-sage-accent"
         />
-        <span className="text-sm text-sage-text-dim">SAGE-USDC</span>
+        <span className="label-mono">SAGE-USDC</span>
         <button
           type="button"
           disabled={!canSubmit}
           onClick={() => deposit.mutate(parsed)}
-          className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-primary"
         >
           {deposit.isPending ? "Sending…" : "Deposit"}
         </button>
@@ -61,7 +67,7 @@ export function DepositCard() {
         </p>
       )}
       {deposit.isSuccess && (
-        <p className="text-xs text-sage-success break-all">
+        <p className="text-xs text-sage-accent break-all">
           Deposited.{" "}
           <a
             href={`https://solscan.io/tx/${deposit.data}?cluster=devnet`}

@@ -4,25 +4,29 @@ export function BriefingCard() {
   const pay = usePayBriefing();
 
   return (
-    <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold text-sage-text">
+    <div className="card p-6 space-y-4">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-base font-semibold text-sage-text">
           x402 paid briefing
         </h3>
-        <p className="text-sm text-sage-text-dim">
-          Vault releases 0.20 SAGE-USDC to the briefing service treasury
-          with the nonce in a memo. Service verifies on-chain, returns text.
-        </p>
+        <span className="pill pill-accent">0.20 USDC</span>
       </div>
 
-      <button
-        type="button"
-        onClick={() => pay.mutate()}
-        disabled={pay.isPending}
-        className="rounded-md bg-sage-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {pay.isPending ? "Settling…" : "Pay 0.20 USDC and read briefing"}
-      </button>
+      <p className="text-sm text-sage-text-dim leading-relaxed">
+        Vault releases 0.20 SAGE-USDC to the briefing service treasury with the
+        nonce in a memo. Service verifies on-chain, returns text.
+      </p>
+
+      <div className="border-t border-dashed border-sage-border-soft pt-4">
+        <button
+          type="button"
+          onClick={() => pay.mutate()}
+          disabled={pay.isPending}
+          className="btn btn-primary w-full"
+        >
+          {pay.isPending ? "Settling…" : "Pay 0.20 and read briefing"}
+        </button>
+      </div>
 
       {pay.isError && (
         <p className="text-xs text-sage-danger break-all">
@@ -31,16 +35,19 @@ export function BriefingCard() {
       )}
 
       {pay.isSuccess && (
-        <div className="space-y-2">
-          <p className="text-sm text-sage-text">{pay.data.briefing}</p>
-          <p className="text-xs text-sage-success">
+        <div className="space-y-2 border-t border-dashed border-sage-border-soft pt-4">
+          <p className="label-mono">Briefing</p>
+          <p className="text-sm text-sage-text leading-relaxed">
+            {pay.data.briefing}
+          </p>
+          <p className="text-xs">
             <a
               href={`https://solscan.io/tx/${pay.data.signature}?cluster=devnet`}
               target="_blank"
               rel="noreferrer"
-              className="underline"
+              className="text-sage-accent underline font-mono"
             >
-              View settlement on solscan
+              ↗ settlement on solscan
             </a>
           </p>
         </div>

@@ -20,70 +20,65 @@ function compactUsd(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function VaultCard({ vault }: { vault: RankedVault }) {
-  const apy = vault.analytics.apy;
+export function VaultCard({
+  vault,
+  rank,
+}: {
+  vault: RankedVault;
+  rank?: number;
+}) {
   const symbols = vault.underlyingTokens.map((u) => u.symbol).join(" / ");
 
-  const tierClass =
+  const riskPillClass =
     vault.riskTier === "high-risk"
-      ? "border-sage-danger/40 bg-sage-danger/5"
+      ? "pill-danger"
       : vault.riskTier === "caution"
-        ? "border-sage-warning/40 bg-sage-warning/5"
-        : "border-sage-border bg-sage-surface";
+        ? "pill-warning"
+        : "pill-accent";
+
+  const riskLabel =
+    vault.riskTier === "high-risk"
+      ? "high risk"
+      : vault.riskTier === "caution"
+        ? "caution"
+        : "safe";
 
   return (
-    <div className={`rounded-xl border p-5 space-y-3 ${tierClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-sage-text-dim">
-            {vault.protocol.name} · {vault.network}
-          </p>
-          <h3 className="text-lg font-semibold text-sage-text">
-            {symbols}{" "}
-            <span className="text-sage-text-dim font-normal">
-              · {vault.name}
-            </span>
-          </h3>
-        </div>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-widest text-sage-text-dim">
-            APY
-          </p>
-          <p className="text-2xl font-bold text-sage-text">
-            {pct(vault.apyTotal)}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 text-xs text-sage-text-dim">
-        <span>
-          Base <span className="text-sage-text">{pct(apy.base)}</span>
-        </span>
-        <span>
-          Reward <span className="text-sage-text">{pct(apy.reward)}</span>
-        </span>
-        <span>
-          TVL <span className="text-sage-text">{compactUsd(vault.tvlUsd)}</span>
-        </span>
-      </div>
-
-      {(vault.riskTier !== "ok" || vault.cautions.length > 0) && (
-        <div className="flex flex-wrap gap-2">
-          {vault.riskTier === "high-risk" && (
-            <span className="rounded-full bg-sage-danger/15 px-2.5 py-0.5 text-xs text-sage-danger">
-              high risk
-            </span>
-          )}
-          {vault.cautions.map((reason) => (
-            <span
-              key={reason}
-              className="rounded-full bg-sage-warning/15 px-2.5 py-0.5 text-xs text-sage-warning"
-            >
-              {CAUTION_LABEL[reason]}
-            </span>
-          ))}
+    <div className="card bg-white p-4 flex items-center gap-4">
+      {rank != null && (
+        <div className="w-9 h-9 shrink-0 rounded-full border border-sage-border flex items-center justify-center font-mono font-bold text-sm">
+          {rank}
         </div>
       )}
+      <div className="w-10 h-10 shrink-0 rounded-md border border-sage-border-soft bg-sage-surface-soft" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-semibold text-sage-text">
+            {vault.protocol.name}
+          </span>
+          <span className="label-mono">{vault.network}</span>
+          <span className={`pill ${riskPillClass}`}>{riskLabel}</span>
+        </div>
+        <p className="label-mono mt-1">
+          {symbols} · TVL {compactUsd(vault.tvlUsd)} · base {pct(vault.analytics.apy.base)}{" "}
+          · reward {pct(vault.analytics.apy.reward)}
+        </p>
+        {vault.cautions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {vault.cautions.map((reason) => (
+              <span key={reason} className="pill pill-warning">
+                {CAUTION_LABEL[reason]}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="text-right shrink-0">
+        <p className="num-mono text-2xl font-bold text-sage-text leading-none">
+          {pct(vault.apyTotal)}
+        </p>
+        <p className="label-mono mt-1">APY</p>
+      </div>
     </div>
   );
 }
