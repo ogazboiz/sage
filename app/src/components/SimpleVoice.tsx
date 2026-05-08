@@ -56,20 +56,65 @@ function parseIntent(text: string): ParsedIntent {
   return { kind: "unknown" };
 }
 
-function speak(text: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) {
-      resolve();
-      return;
+// Eric — the same voice configured on the Conversational Agent. Override via
+// VITE_ELEVENLABS_VOICE_ID if you pick a different voice in the dashboard.
+const VOICE_ID =
+  import.meta.env.VITE_ELEVENLABS_VOICE_ID ?? "cjVigY5qzO86Huf0OWal";
+const TTS_MODEL = "eleven_flash_v2_5";
+
+let currentAudio: HTMLAudioElement | null = null;
+
+async function speak(text: string): Promise<void> {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  try {
+    const res = await fetch(
+      `/api/elevenlabs/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          model_id: TTS_MODEL,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      },
+    );
+    if (!res.ok) {
+      // Fall back to browser TTS so the demo still has audio if the API key
+      // is missing or rate-limited.
+      throw new Error(`ElevenLabs TTS ${res.status}`);
     }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    await new Promise<void>((resolve) => {
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        resolve();
+      };
+      void audio.play();
+    });
+  } catch {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
-  });
+    await new Promise<void>((resolve) => {
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+  }
 }
 
 function summariseTopVaults(top: RankedVault[]): string {
@@ -257,15 +302,15 @@ export function SimpleVoice() {
     <div className="rounded-2xl border border-sage-border bg-sage-surface p-6 space-y-4">
       <div className="flex items-baseline justify-between">
         <h3 className="text-lg font-semibold text-sage-text">
-          Voice (fallback)
+          Voice
         </h3>
         <p className="text-xs text-sage-text-dim">
           {listening ? "listening…" : "tap to talk"}
         </p>
       </div>
       <p className="text-xs text-sage-text-dim">
-        Browser STT + TTS. Try: "what's my balance", "find me yield", "deposit
-        ten cents", "give me a briefing".
+        Browser STT + ElevenLabs TTS. Try: "what's my balance", "find me yield",
+        "deposit ten cents", "give me a briefing".
       </p>
       <button
         type="button"
