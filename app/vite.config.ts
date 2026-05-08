@@ -57,6 +57,18 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
+        "/api/elevenlabs": {
+          target: "https://api.elevenlabs.io",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/elevenlabs/, ""),
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq) => {
+              if (env.ELEVENLABS_API_KEY) {
+                proxyReq.setHeader("xi-api-key", env.ELEVENLABS_API_KEY);
+              }
+            });
+          },
+        },
       },
     },
     resolve: {
