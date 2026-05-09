@@ -125,9 +125,8 @@ async function verifyPayment(
   return { ok: false, reason: "No matching SPL transfer to treasury found" };
 }
 
-// LI.FI Earn — live source for stablecoin yields. Solana mainnet chain id.
+// LI.FI Earn — live cross-chain stablecoin yield index.
 // Earn Data API lives on earn.li.fi (li.quest is the Composer host).
-const LIFI_SOLANA_CHAIN_ID = 1151111081099710;
 const LIFI_EARN_BASE = "https://earn.li.fi";
 const LIFI_API_KEY = process.env.LIFI_API_KEY ?? process.env.VITE_LIFI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -158,11 +157,13 @@ interface RankedVaultLite {
 
 let cachedVaults: { ts: number; data: EarnVaultLite[] } | null = null;
 
-// Symbols we accept as USDC-equivalent on Solana (matches the frontend
-// ranker's alias group).
+// Symbols we accept as USDC-equivalent (matches the frontend ranker's
+// alias group). LI.FI's Solana coverage is sparse, so we surface
+// cross-chain USDC yield. The agent's payment is on Solana; the data the
+// agent buys is cross-chain by design.
 const USDC_SYMBOLS = new Set(["USDC", "USDC.E", "USDBC"]);
 
-async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
+async function fetchTopUsdcVaults(): Promise<EarnVaultLite[]> {
   if (!LIFI_API_KEY) {
     console.warn("[briefing] LIFI_API_KEY not set — returning empty");
     return [];
@@ -170,12 +171,10 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
   if (cachedVaults && Date.now() - cachedVaults.ts < 60_000) {
     return cachedVaults.data;
   }
-  // Solana mainnet chainId (1151111081099710) overflows the API's int32
-  // chainId query param. Also `symbol=USDC` filters too aggressively and
-  // skips Solana vaults (their underlying tokens may be tagged differently
-  // upstream). Match the frontend approach: walk pagination by TVL floor
-  // only, filter Solana + USDC-alias client-side.
-  const solanaVaults: EarnVaultLite[] = [];
+  // Walk pagination, collect any vault with a USDC-equivalent underlying
+  // token. We stop at first hit count we can rank from (24 vaults is plenty
+  // for top-3 reporting).
+  const vaults: EarnVaultLite[] = [];
   let totalSeen = 0;
   let cursor: string | undefined;
   for (let page = 0; page < 20; page++) {
@@ -201,28 +200,28 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     const pageData = body.data ?? [];
     totalSeen += pageData.length;
     for (const v of pageData) {
-      const isSolana =
-        v.chainId === LIFI_SOLANA_CHAIN_ID ||
-        v.network?.toLowerCase() === "solana";
-      if (!isSolana) continue;
       const hasUsdc = v.underlyingTokens?.some((t) =>
         USDC_SYMBOLS.has(t.symbol?.toUpperCase()),
       );
-      if (hasUsdc) solanaVaults.push(v);
+      if (hasUsdc) vaults.push(v);
     }
     if (!body.nextCursor || pageData.length === 0) break;
     cursor = body.nextCursor;
+    if (vaults.length >= 24) break; // enough for ranking
   }
   console.log(
     "[briefing] LI.FI walked",
     totalSeen,
     "vaults across pages,",
-    solanaVaults.length,
-    "on Solana with USDC",
+    vaults.length,
+    "USDC vaults across chains",
   );
-  cachedVaults = { ts: Date.now(), data: solanaVaults };
-  return solanaVaults;
+  cachedVaults = { ts: Date.now(), data: vaults };
+  return vaults;
 }
+
+// Backwards alias for older callers in this file.
+const fetchTopSolanaUsdcVaults = fetchTopUsdcVaults;
 
 function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
   return vaults
@@ -307,7 +306,7 @@ async function generateBriefing(): Promise<string> {
 
   const ranked = rankVaults(vaults);
   if (ranked.length === 0) {
-    return `Solana DeFi briefing, ${ts}. Live yield feed unavailable; falling back to last known posture. Stablecoin yields have been clustering 4 to 5 percent across Kamino and Marginfi. Risk note: pools with reward APY above 60 percent of the headline number remain flagged.`;
+    return `Cross-chain USDC briefing, ${ts}. LI.FI Earn feed returned no qualifying vaults on this fetch. Stablecoin yields generally cluster 4 to 6 percent across major lending markets. Risk note: pools with reward APY above 60 percent of the headline number stay flagged.`;
   }
 
   const top = ranked.slice(0, 3);
@@ -317,14 +316,16 @@ async function generateBriefing(): Promise<string> {
   const dataSummary = top
     .map(
       (v) =>
-        `${v.protocol} (${v.network}): ${v.apy.toFixed(2)}% APY, ${compactUsd(
-          v.tvl,
-        )} TVL, ${v.reward.toFixed(2)}% from rewards`,
+        `${v.protocol} on ${v.network}: ${v.apy.toFixed(
+          2,
+        )}% APY, ${compactUsd(v.tvl)} TVL, ${v.reward.toFixed(
+          2,
+        )}% from rewards`,
     )
     .join(" / ");
 
   const geminiProse = await geminiSummarise(
-    `Write a tight 4-sentence Solana DeFi briefing dated ${ts}. Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL: ${compactUsd(
+    `Write a tight 4-sentence cross-chain USDC yield briefing dated ${ts} sourced from LI.FI Earn. Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL across chains: ${compactUsd(
       totalTvl,
     )}. ${
       rewardHeavy
@@ -334,15 +335,15 @@ async function generateBriefing(): Promise<string> {
             0,
           )}% from rewards) as caution.`
         : "No reward-heavy outliers in the top set."
-    } Active voice. No em dashes. Concrete numbers, no platitudes.`,
+    } Mention the chain each top vault sits on. Active voice. No em dashes. Concrete numbers, no platitudes.`,
   );
   if (geminiProse) return geminiProse;
 
   // Fallback: templated prose if Gemini is unavailable.
   const topLine = top
-    .map((v) => `${v.protocol} at ${v.apy.toFixed(2)} percent`)
+    .map((v) => `${v.protocol} on ${v.network} at ${v.apy.toFixed(2)} percent`)
     .join(", ");
-  return `Solana DeFi briefing, ${ts}. Top USDC vaults right now: ${topLine}. Combined TVL across the top ten USDC vaults sits at ${compactUsd(
+  return `Cross-chain USDC briefing, ${ts}. Top vaults right now: ${topLine}. Combined TVL across the top ten qualifying USDC vaults sits at ${compactUsd(
     totalTvl,
   )}. ${
     rewardHeavy
@@ -362,13 +363,13 @@ async function generateYieldSnapshot(): Promise<{
   oneLine: string;
 }> {
   const ts = new Date().toISOString();
-  const vaults = await fetchTopSolanaUsdcVaults().catch(() => []);
+  const vaults = await fetchTopUsdcVaults().catch(() => []);
   const ranked = rankVaults(vaults).slice(0, 3);
   const oneLine =
     ranked.length === 0
-      ? "Yield feed unavailable."
+      ? "LI.FI Earn returned no qualifying USDC vaults this fetch."
       : ranked
-          .map((v) => `${v.protocol} ${v.apy.toFixed(2)}%`)
+          .map((v) => `${v.protocol} on ${v.network} ${v.apy.toFixed(2)}%`)
           .join(" · ");
   return {
     ts,
@@ -581,8 +582,8 @@ app.post(
 app.get("/services", (_, res) => {
   res.json({
     services: [
-      { endpoint: "/brief", price: 0.2, description: "Long-form Solana DeFi briefing" },
-      { endpoint: "/yield-snapshot", price: 0.05, description: "Top 3 USDC vaults right now" },
+      { endpoint: "/brief", price: 0.2, description: "Long-form cross-chain USDC briefing from LI.FI Earn + Gemini" },
+      { endpoint: "/yield-snapshot", price: 0.05, description: "Top 3 USDC vaults across chains right now" },
       { endpoint: "/alert-check", price: 0.05, description: "Did this vault's tier change?" },
       { endpoint: "/synthesize", price: 0.1, description: "Synthesize accumulated context into prose" },
     ],
