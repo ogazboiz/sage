@@ -158,17 +158,17 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
             <>
               <button
                 type="button"
-                onClick={() => vaultQuery.refetch()}
+                onClick={() => ctx?.go("bridge")}
                 className="btn btn-primary"
               >
-                Refresh
+                + Fund
               </button>
               <button
                 type="button"
-                onClick={() => ctx?.go("voice")}
+                onClick={() => vaultQuery.refetch()}
                 className="btn"
               >
-                Talk
+                Refresh
               </button>
               <button
                 type="button"

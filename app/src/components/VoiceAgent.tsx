@@ -145,6 +145,31 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         });
       },
 
+      propose_bridge: async (params: Record<string, unknown>) => {
+        // Agent-assisted bridge flow via LI.FI Composer. The agent quotes a
+        // route from any source chain into the Sage vault on Solana, returns
+        // the route name + fees + ETA. Free read because Composer's quote
+        // endpoint doesn't charge; execution happens on the Bridge tab when
+        // the user signs on the source chain.
+        const sourceChain = String(params.sourceChain ?? "base").toLowerCase();
+        const amountStr = String(params.amountUsdc ?? "");
+        const amountUsdc = parseFloat(amountStr);
+        if (!Number.isFinite(amountUsdc) || amountUsdc <= 0) {
+          return "Specify a positive USDC amount to bridge.";
+        }
+        const { publicKey } = depsRef.current;
+        if (!publicKey) return "Wallet not connected.";
+
+        // Open the Bridge tab so the user can see the quote + execute.
+        ctx?.go("bridge");
+        return JSON.stringify({
+          message: `Opened the Bridge tab. The user can quote a LI.FI Composer route bringing ${amountUsdc.toFixed(
+            2,
+          )} USDC from ${sourceChain} into their Sage vault on Solana, then execute by signing on the source chain.`,
+          source: "LI.FI Composer",
+        });
+      },
+
       find_idle_assets: async () => {
         // Free read tool: surfaces idle USDC the user could put to work and
         // suggests where, sourced from LI.FI Earn. No payment required.
@@ -327,6 +352,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           {" "}with tools <code className="font-mono">get_vault_status</code>,{" "}
           <code className="font-mono">find_yield</code>,{" "}
           <code className="font-mono">find_idle_assets</code>,{" "}
+          <code className="font-mono">propose_bridge</code>,{" "}
           <code className="font-mono">propose_deposit</code>,{" "}
           <code className="font-mono">propose_yield_deposit</code>,{" "}
           <code className="font-mono">pay_briefing</code>, and{" "}
@@ -435,7 +461,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   // Tool calls observed (V2 timeline) — derive from transcript message lines.
   const toolEvents = transcript.filter((line) =>
-    /(get_vault_status|find_yield|find_idle_assets|propose_deposit|propose_yield_deposit|pay_briefing|start_autonomous_task)/.test(line),
+    /(get_vault_status|find_yield|find_idle_assets|propose_bridge|propose_deposit|propose_yield_deposit|pay_briefing|start_autonomous_task)/.test(line),
   );
 
   if (!isActive) {
@@ -635,6 +661,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             "get_vault_status",
             "find_yield",
             "find_idle_assets",
+            "propose_bridge",
             "propose_deposit",
             "propose_yield_deposit",
             "pay_briefing",
