@@ -47,6 +47,14 @@ export type TaskStatus =
   | "stopped"
   | "error";
 
+export interface TaskWrapUp {
+  summary: string;
+  totalSpent: number;
+  iterationCount: number;
+  completeSig: string | null;
+  durationMs: number;
+}
+
 export interface ServiceCall {
   endpoint: string;
   price: number;
@@ -124,6 +132,7 @@ export function useAutonomousTask() {
   const [budgetTotal, setBudgetTotal] = useState<number>(0);
   const [endsAt, setEndsAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [wrapUp, setWrapUp] = useState<TaskWrapUp | null>(null);
 
   const taskRef = useRef<TaskRefState | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,6 +151,7 @@ export function useAutonomousTask() {
     stopTimer();
     setStatus("stopping");
 
+    let completeSig: string | null = null;
     try {
       const agent = loadOrCreateAgentKeypair();
       if (program && publicKey) {
@@ -156,14 +166,54 @@ export function useAutonomousTask() {
         const blockhash = await connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash.blockhash;
         tx.sign(agent);
-        const sig = await connection.sendRawTransaction(tx.serialize());
-        await connection.confirmTransaction({ signature: sig, ...blockhash }, "confirmed");
+        completeSig = await connection.sendRawTransaction(tx.serialize());
+        await connection.confirmTransaction(
+          { signature: completeSig, ...blockhash },
+          "confirmed",
+        );
       }
     } catch (err) {
       console.warn("[autonomous] complete_task failed:", (err as Error).message);
     }
     queryClient.invalidateQueries({ queryKey: ["sage-vault"] });
     queryClient.invalidateQueries({ queryKey: ["vault-balance"] });
+
+    // Free post-loop wrap-up: ask the briefing service for a Gemini summary
+    // of what the agent paid to learn. Failures here don't matter, we still
+    // show the deterministic stats.
+    const totalSpent = task.iterations.reduce((sum, it) => sum + it.amount, 0);
+    const durationMs = Date.now() - task.startedAt;
+    let summary = `Agent paid for ${task.iterations.length} services totalling $${totalSpent.toFixed(
+      2,
+    )} USDC.`;
+    try {
+      const res = await fetch(`${BRIEFING_BASE}/wrap-up`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal: task.goal,
+          iterations: task.iterations.map((it) => ({
+            endpoint: it.endpoint,
+            amount: it.amount,
+            result: it.result,
+          })),
+        }),
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { summary?: string };
+        if (typeof body.summary === "string") summary = body.summary;
+      }
+    } catch (err) {
+      console.warn("[autonomous] wrap-up fetch failed:", (err as Error).message);
+    }
+
+    setWrapUp({
+      summary,
+      totalSpent,
+      iterationCount: task.iterations.length,
+      completeSig,
+      durationMs,
+    });
     setStatus("stopped");
     taskRef.current = null;
   }, [program, publicKey, connection, queryClient, stopTimer]);
@@ -318,6 +368,7 @@ export function useAutonomousTask() {
       }
 
       setError(null);
+      setWrapUp(null);
       setStatus("approving");
       const agent = loadOrCreateAgentKeypair();
 
@@ -406,6 +457,7 @@ export function useAutonomousTask() {
     budgetRemaining,
     endsAt,
     error,
+    wrapUp,
     start,
     stop,
   };

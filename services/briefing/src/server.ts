@@ -579,6 +579,56 @@ app.post(
   }),
 );
 
+// Free wrap-up endpoint, no x402. Called by the autonomous loop after
+// complete_task settles, to ask Gemini for a one-paragraph summary of what
+// the agent paid to learn during the run. Free because the agent already
+// paid for every iteration; the wrap-up is just stitching them together.
+app.post("/wrap-up", async (req, res) => {
+  const goal = typeof req.body?.goal === "string" ? req.body.goal : "(no goal)";
+  const iterations = Array.isArray(req.body?.iterations)
+    ? (req.body.iterations as Array<{
+        endpoint?: string;
+        amount?: number;
+        result?: string;
+      }>)
+    : [];
+  if (iterations.length === 0) {
+    return res.json({
+      summary:
+        "The agent stopped before completing any paid iterations. Nothing to summarise.",
+    });
+  }
+  const totalSpent = iterations.reduce(
+    (sum, it) => sum + (typeof it.amount === "number" ? it.amount : 0),
+    0,
+  );
+  const breakdown = iterations
+    .slice(-12)
+    .map(
+      (it, i) =>
+        `[${i + 1}] ${it.endpoint ?? "?"} ($${(it.amount ?? 0).toFixed(
+          2,
+        )}): ${(it.result ?? "").slice(0, 220)}`,
+    )
+    .join("\n");
+
+  const prose = await geminiSummarise(
+    `An autonomous AI agent on Solana ran a recurring task over a USDC budget. The user's goal was: "${goal}".\nThe agent paid for ${iterations.length} services totalling ${totalSpent.toFixed(2)} USDC. Most recent results:\n${breakdown}\n\nWrite a tight 3-sentence wrap-up summarising what the agent learned and any signal worth flagging. Active voice. No em dashes. Concrete numbers from the results, no platitudes.`,
+  );
+
+  return res.json({
+    summary:
+      prose ??
+      `Agent paid for ${iterations.length} services totalling $${totalSpent.toFixed(
+        2,
+      )} USDC. Most recent observation: ${
+        iterations[iterations.length - 1]?.result?.slice(0, 240) ?? "—"
+      }`,
+    totalSpent,
+    iterationCount: iterations.length,
+  });
+});
+
 app.get("/services", (_, res) => {
   res.json({
     services: [

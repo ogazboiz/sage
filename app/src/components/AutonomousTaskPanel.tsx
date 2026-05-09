@@ -272,6 +272,59 @@ export function AutonomousTaskPanel() {
         </div>
       )}
 
+      {/* Wrap-up card after the loop ends */}
+      {task.status === "stopped" && task.wrapUp && (
+        <div className="card bg-white p-5 space-y-3 border-sage-accent!">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-sage-text">
+              Task complete
+            </p>
+            <span className="pill pill-accent">
+              {task.wrapUp.iterationCount} iterations
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="label-mono">Spent</p>
+              <p className="num-mono text-[18px] font-bold text-sage-text mt-1">
+                ${task.wrapUp.totalSpent.toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="label-mono">Refunded</p>
+              <p className="num-mono text-[18px] font-bold text-sage-text mt-1">
+                ${(task.budgetTotal - task.wrapUp.totalSpent).toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="label-mono">Duration</p>
+              <p className="num-mono text-[18px] font-bold text-sage-text mt-1">
+                {(task.wrapUp.durationMs / 1000).toFixed(0)}s
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-dashed border-sage-border-soft pt-3">
+            <p className="label-mono mb-1.5">What the agent learned</p>
+            <p className="text-[13px] text-sage-text leading-relaxed">
+              {task.wrapUp.summary}
+            </p>
+          </div>
+
+          {task.wrapUp.completeSig && (
+            <a
+              href={txUrl(task.wrapUp.completeSig)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[10px] text-sage-text-dim hover:text-sage-accent block"
+            >
+              complete_task tx {shortSig(task.wrapUp.completeSig)} ↗
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Iteration log */}
       {task.iterations.length > 0 && (
         <div className="space-y-2">
