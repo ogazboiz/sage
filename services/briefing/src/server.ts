@@ -126,8 +126,9 @@ async function verifyPayment(
 }
 
 // LI.FI Earn — live source for stablecoin yields. Solana mainnet chain id.
+// Earn Data API lives on earn.li.fi (li.quest is the Composer host).
 const LIFI_SOLANA_CHAIN_ID = 1151111081099710;
-const LIFI_BASE = "https://li.quest";
+const LIFI_EARN_BASE = "https://earn.li.fi";
 const LIFI_API_KEY = process.env.LIFI_API_KEY ?? process.env.VITE_LIFI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -158,23 +159,30 @@ interface RankedVaultLite {
 let cachedVaults: { ts: number; data: EarnVaultLite[] } | null = null;
 
 async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
-  if (!LIFI_API_KEY) return [];
+  if (!LIFI_API_KEY) {
+    console.warn("[briefing] LIFI_API_KEY not set — returning empty");
+    return [];
+  }
   if (cachedVaults && Date.now() - cachedVaults.ts < 60_000) {
     return cachedVaults.data;
   }
-  const url = new URL(`${LIFI_BASE}/v1/vaults`);
+  const url = new URL(`${LIFI_EARN_BASE}/v1/vaults`);
   url.searchParams.set("chainId", String(LIFI_SOLANA_CHAIN_ID));
   url.searchParams.set("symbol", "USDC");
   url.searchParams.set("sortBy", "apy");
   url.searchParams.set("minTvlUsd", "100000");
+  console.log("[briefing] fetching LI.FI Earn:", url.toString());
   const res = await fetch(url.toString(), {
     headers: { "x-lifi-api-key": LIFI_API_KEY },
     signal: AbortSignal.timeout(8_000),
   });
   if (!res.ok) {
-    throw new Error(`LI.FI Earn ${res.status}: ${await res.text()}`);
+    const text = await res.text();
+    console.error("[briefing] LI.FI Earn error:", res.status, text);
+    throw new Error(`LI.FI Earn ${res.status}: ${text}`);
   }
   const body = (await res.json()) as { data: EarnVaultLite[] };
+  console.log("[briefing] LI.FI returned", body.data?.length ?? 0, "vaults");
   cachedVaults = { ts: Date.now(), data: body.data ?? [] };
   return cachedVaults.data;
 }
