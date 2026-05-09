@@ -355,11 +355,11 @@ async function generateBriefing(goal?: string): Promise<string> {
     )
     .join(" / ");
 
-  // When the user's goal mentions Solana but our LI.FI Earn pool has none,
-  // tell Gemini to be honest about it AND mention concrete Solana
-  // alternatives the user can act on directly (Marginfi, Kamino, Save, etc).
-  const solanaNote = goalMentionsSolana
-    ? ` The user's goal explicitly mentions Solana, but LI.FI Earn's USDC index does not currently include Solana vaults; tell the user this directly and recommend they look at Marginfi, Kamino, Save, or Drift on Solana for native USDC yield. Lead with this acknowledgement before listing the cross-chain numbers.`
+  // When the goal mentions Solana, prepend a deterministic disclaimer so
+  // Gemini cannot skip it. Then let Gemini write the cross-chain prose
+  // for the rest.
+  const solanaPreamble = goalMentionsSolana
+    ? `LI.FI Earn does not currently index Solana USDC vaults. For native Solana USDC yield, look at Marginfi, Kamino, Save, or Drift directly. The cross-chain alternatives the agent surfaced are below. `
     : "";
 
   const goalLine = goalText
@@ -367,7 +367,7 @@ async function generateBriefing(goal?: string): Promise<string> {
     : "";
 
   const geminiProse = await geminiSummarise(
-    `Write a tight 4-sentence cross-chain USDC yield briefing dated ${ts} sourced from LI.FI Earn.${goalLine}${solanaNote} Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL across chains: ${compactUsd(
+    `Write a tight 4-sentence cross-chain USDC yield briefing dated ${ts} sourced from LI.FI Earn.${goalLine} Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL across chains: ${compactUsd(
       totalTvl,
     )}. ${
       rewardHeavy
@@ -379,13 +379,13 @@ async function generateBriefing(goal?: string): Promise<string> {
         : "No reward-heavy outliers in the top set."
     } Mention the chain each top vault sits on. Active voice. No em dashes. Concrete numbers, no platitudes.`,
   );
-  if (geminiProse) return geminiProse;
+  if (geminiProse) return solanaPreamble + geminiProse;
 
   // Fallback: templated prose if Gemini is unavailable.
   const topLine = top
     .map((v) => `${v.protocol} on ${v.network} at ${v.apy.toFixed(2)} percent`)
     .join(", ");
-  return `Cross-chain USDC briefing, ${ts}. Top vaults right now: ${topLine}. Combined TVL across the top ten qualifying USDC vaults sits at ${compactUsd(
+  return `${solanaPreamble}Cross-chain USDC briefing, ${ts}. Top vaults right now: ${topLine}. Combined TVL across the top ten qualifying USDC vaults sits at ${compactUsd(
     totalTvl,
   )}. ${
     rewardHeavy
