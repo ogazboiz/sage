@@ -129,19 +129,37 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       find_yield: async ({ intent }: Record<string, unknown>) => {
         const data = depsRef.current.vaultsData;
         if (!data) return "Vault data still loading.";
-        const top = data.ranked.slice(0, 3).map((v) => ({
+        const ranked = data.ranked.slice(0, 3);
+        if (ranked.length === 0) {
+          return "No qualifying USDC vaults found right now.";
+        }
+        const fmtTvl = (n: number) => {
+          if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+          if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+          if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+          return `$${n.toFixed(0)}`;
+        };
+        const top = ranked.map((v) => ({
           slug: v.slug,
           protocol: v.protocol.name,
           chain: v.network,
-          underlying: v.underlyingTokens.map((u) => u.symbol).join("/"),
           apy: v.apyTotal.toFixed(2),
-          tvlUsd: Math.round(v.tvlUsd),
+          tvl: fmtTvl(v.tvlUsd),
           risk: v.riskTier,
         }));
+        const safest = top[0]!;
+        const recommendation = `${safest.protocol} on ${safest.chain} is the safest USDC yield right now: ${safest.apy}% APY with ${safest.tvl} TVL. Higher TVL is the safety signal here. Alternatives: ${top
+          .slice(1)
+          .map((a) => `${a.protocol} on ${a.chain} at ${a.apy}%`)
+          .join(", ")}.`;
         return JSON.stringify({
           intent: String(intent ?? ""),
-          top,
+          recommendation,
+          safest,
+          alternatives: top.slice(1),
           source: "LI.FI Earn",
+          guidance:
+            "Lead the spoken answer with the recommendation field verbatim. Do NOT list APYs in arbitrary order; the user asked about safety, frame it that way.",
         });
       },
 
@@ -177,25 +195,37 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         const ownerUsdc = depsRef.current.ownerUsdcBalance ?? 0;
         const vaultUsdc = depsRef.current.vaultUsdcBalance ?? 0;
 
-        const top =
-          data?.ranked.slice(0, 3).map((v) => ({
-            protocol: v.protocol.name,
-            network: v.network,
-            apy: v.apyTotal.toFixed(2),
-            risk: v.riskTier,
-          })) ?? [];
+        const safest = data?.ranked[0];
+        const recommendation =
+          ownerUsdc > 0.01
+            ? `Your wallet holds ${ownerUsdc.toFixed(
+                2,
+              )} USDC outside the Sage vault, sitting idle. The vault holds ${vaultUsdc.toFixed(
+                2,
+              )}. Recommend depositing the idle USDC into the vault, then starting an autonomous task.${
+                safest
+                  ? ` Top safe yield right now is ${safest.protocol.name} on ${safest.network} at ${safest.apyTotal.toFixed(
+                      2,
+                    )}% APY.`
+                  : ""
+              }`
+            : `Your Sage vault holds ${vaultUsdc.toFixed(
+                2,
+              )} USDC. Wallet has no idle USDC outside it.${
+                safest
+                  ? ` Top safe yield right now is ${safest.protocol.name} on ${safest.network} at ${safest.apyTotal.toFixed(
+                      2,
+                    )}% APY.`
+                  : ""
+              }`;
 
         return JSON.stringify({
+          recommendation,
           ownerWalletUsdc: ownerUsdc.toFixed(2),
           sageVaultUsdc: vaultUsdc.toFixed(2),
-          guidance:
-            ownerUsdc > 0.01
-              ? `${ownerUsdc.toFixed(
-                  2,
-                )} USDC sits idle in the user's wallet. Suggest depositing it into the Sage vault and running an autonomous task to deploy it.`
-              : "User's wallet has no idle USDC outside the Sage vault.",
-          topYield: top,
           source: "LI.FI Earn",
+          guidance:
+            "Lead the spoken answer with the recommendation field verbatim. Be concise.",
         });
       },
 
