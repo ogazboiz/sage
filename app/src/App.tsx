@@ -184,28 +184,6 @@ function App() {
           {screen === "bridge" && <BridgeCard />}
 
           {screen === "activity" && <AutonomousTaskPanel />}
-
-          <footer className="pt-10 pb-6 text-[11px] text-sage-text-dim font-mono flex flex-wrap gap-x-4 gap-y-1">
-            <span>devnet</span>
-            <span>·</span>
-            <a
-              className="hover:text-sage-text"
-              href="https://github.com/ogazboiz/sage"
-              target="_blank"
-              rel="noreferrer"
-            >
-              github
-            </a>
-            <span>·</span>
-            <a
-              className="hover:text-sage-text"
-              href="https://solscan.io/account/64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ?cluster=devnet"
-              target="_blank"
-              rel="noreferrer"
-            >
-              program
-            </a>
-          </footer>
         </main>
       )}
     </div>
