@@ -158,6 +158,10 @@ interface RankedVaultLite {
 
 let cachedVaults: { ts: number; data: EarnVaultLite[] } | null = null;
 
+// Symbols we accept as USDC-equivalent on Solana (matches the frontend
+// ranker's alias group).
+const USDC_SYMBOLS = new Set(["USDC", "USDC.E", "USDBC"]);
+
 async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
   if (!LIFI_API_KEY) {
     console.warn("[briefing] LIFI_API_KEY not set — returning empty");
@@ -167,17 +171,16 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     return cachedVaults.data;
   }
   // Solana mainnet chainId (1151111081099710) overflows the API's int32
-  // chainId query param. Walk pagination instead, filter to Solana
-  // client-side. Cap at 8 pages so we don't burn rate limit if the index is
-  // huge.
+  // chainId query param. Also `symbol=USDC` filters too aggressively and
+  // skips Solana vaults (their underlying tokens may be tagged differently
+  // upstream). Match the frontend approach: walk pagination by TVL floor
+  // only, filter Solana + USDC-alias client-side.
   const solanaVaults: EarnVaultLite[] = [];
   let totalSeen = 0;
   let cursor: string | undefined;
-  for (let page = 0; page < 8; page++) {
+  for (let page = 0; page < 20; page++) {
     const url = new URL(`${LIFI_EARN_BASE}/v1/vaults`);
-    url.searchParams.set("symbol", "USDC");
-    url.searchParams.set("sortBy", "tvl");
-    url.searchParams.set("minTvlUsd", "10000");
+    url.searchParams.set("minTvlUsd", "50000");
     if (cursor) url.searchParams.set("cursor", cursor);
     console.log(
       `[briefing] fetching LI.FI Earn page ${page}: ${url.toString()}`,
@@ -198,23 +201,24 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     const pageData = body.data ?? [];
     totalSeen += pageData.length;
     for (const v of pageData) {
-      if (
+      const isSolana =
         v.chainId === LIFI_SOLANA_CHAIN_ID ||
-        v.network?.toLowerCase() === "solana"
-      ) {
-        solanaVaults.push(v);
-      }
+        v.network?.toLowerCase() === "solana";
+      if (!isSolana) continue;
+      const hasUsdc = v.underlyingTokens?.some((t) =>
+        USDC_SYMBOLS.has(t.symbol?.toUpperCase()),
+      );
+      if (hasUsdc) solanaVaults.push(v);
     }
     if (!body.nextCursor || pageData.length === 0) break;
     cursor = body.nextCursor;
-    if (solanaVaults.length >= 12) break; // enough for ranking
   }
   console.log(
     "[briefing] LI.FI walked",
     totalSeen,
     "vaults across pages,",
     solanaVaults.length,
-    "on Solana",
+    "on Solana with USDC",
   );
   cachedVaults = { ts: Date.now(), data: solanaVaults };
   return solanaVaults;
