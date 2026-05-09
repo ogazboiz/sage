@@ -166,8 +166,10 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
   if (cachedVaults && Date.now() - cachedVaults.ts < 60_000) {
     return cachedVaults.data;
   }
+  // Solana mainnet chainId (1151111081099710) overflows the API's int32
+  // chainId query param (max 2147483647), so we fetch by symbol + sortBy and
+  // filter to Solana client-side.
   const url = new URL(`${LIFI_EARN_BASE}/v1/vaults`);
-  url.searchParams.set("chainId", String(LIFI_SOLANA_CHAIN_ID));
   url.searchParams.set("symbol", "USDC");
   url.searchParams.set("sortBy", "apy");
   url.searchParams.set("minTvlUsd", "100000");
@@ -182,9 +184,21 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     throw new Error(`LI.FI Earn ${res.status}: ${text}`);
   }
   const body = (await res.json()) as { data: EarnVaultLite[] };
-  console.log("[briefing] LI.FI returned", body.data?.length ?? 0, "vaults");
-  cachedVaults = { ts: Date.now(), data: body.data ?? [] };
-  return cachedVaults.data;
+  const all = body.data ?? [];
+  const solana = all.filter(
+    (v) =>
+      v.chainId === LIFI_SOLANA_CHAIN_ID ||
+      v.network?.toLowerCase() === "solana",
+  );
+  console.log(
+    "[briefing] LI.FI returned",
+    all.length,
+    "vaults total,",
+    solana.length,
+    "on Solana",
+  );
+  cachedVaults = { ts: Date.now(), data: solana };
+  return solana;
 }
 
 function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
