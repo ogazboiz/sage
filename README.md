@@ -91,13 +91,14 @@ What's not here, deliberately:
 
 ## The voice agent
 
-ElevenLabs Conversational Agent with seven bound tools:
+ElevenLabs Conversational Agent with eight bound tools:
 
 | Tool | Cost | Purpose |
 |---|---|---|
 | `get_vault_status()` | free | Read vault balance + active task |
 | `find_yield(intent)` | free | Top 3 vaults from LI.FI Earn, ranked + filtered |
 | `find_idle_assets()` | free | Idle USDC in user's wallet + suggested deployment |
+| `propose_bridge(sourceChain, amountUsdc)` | free | Quote a LI.FI Composer route from any chain into the vault, navigate to Bridge tab |
 | `propose_deposit(amount)` | wallet sig | Surface a confirm card; user clicks Confirm to sign |
 | `propose_yield_deposit(slug, amount)` | wallet sig | Same, for a yield slug from the ranker |
 | `pay_briefing()` | wallet sig | One-shot paid `/brief` call |
@@ -158,18 +159,24 @@ The briefing service auto-loads `app/.env.local` via Node's `--env-file-if-exist
 
 ## Demo paths to try
 
-**1. Manual autonomous loop.** Vault tab → init + deposit ≥ $1 → Activity tab → Briefing shape, $0.50 cap, 30s interval, 2min duration → Start. Sign twice (SOL drip, then approve_task). Watch the loop fire `/brief` and `/yield-snapshot` calls, vault counter ticking down, every iteration linkable on solscan-devnet.
+**1. Manual autonomous loop.** Vault tab → init + deposit ≥ $1 → Activity tab → Briefing shape, $0.50 cap, 30s interval, 2min duration → Start. Sign twice (SOL drip, then approve_task). Watch the loop fire `/brief` and `/yield-snapshot` calls, vault counter ticking down, every iteration linkable on solscan-devnet. Wrap-up card at the end shows total spent, refunded, duration, and a Gemini-generated summary of what the agent learned.
 
 **2. Voice-triggered loop.** Talk → *"Run a cross-chain USDC briefing every 30 seconds for 2 minutes, max one dollar."* Voice agent calls `start_autonomous_task`, app navigates to Activity, form pre-fills. Click Start.
 
-**3. Idle-asset query.** Talk → *"What's idle?"* Voice agent calls `find_idle_assets`, reports USDC sitting outside the vault and suggests where it could earn.
+**3. Cross-chain bridge quote.** Bridge tab → pick Base → enter 50 USDC → click Get quote on Base. LI.FI Composer returns a real route with fees, slippage, ETA. Or via voice: *"Bridge 50 USDC from Base into my vault"* triggers `propose_bridge`, opens the Bridge tab pre-filled.
+
+**4. Idle-asset query.** Talk → *"What's idle?"* Voice agent calls `find_idle_assets`, reports USDC sitting outside the vault and suggests where it could earn.
 
 ## Track alignment
 
 - **Solana Best App.** Novel `agent_keypair` pattern actually load-bearing. Atomic instruction sequences. Demo moment: program rejects the agent at $0.00.
 - **Solana x402 bonus.** Every loop iteration is a real Solana SPL settlement against a paid endpoint. Four endpoints, all spec-compliant.
-- **LI.FI prize.** LI.FI Earn is the cross-chain data layer the agent pays USDC to read. Every `/brief`, `/yield-snapshot`, `/alert-check` call walks LI.FI Earn pagination across chains, ranks by safety, and returns top USDC yield. The agent's payment settles on Solana; the data the agent buys is cross-chain by design — that is the integration story. Every paid call surfaces an `LI.FI Earn` badge in the Activity log.
-- **ElevenLabs prize.** Voice is the only way to start a scheduled task. Conversational Agent with seven bound tools, including `find_idle_assets` (LI.FI free read) and `start_autonomous_task` (full session opener).
+- **LI.FI prize.** Two integration paths, both real:
+  1. **LI.FI Composer route quotes** for cross-chain onboarding into the Sage vault. Bridge tab quotes a real route from Base / Arbitrum / Optimism / Polygon / Ethereum USDC into the vault PDA on Solana, returning route name, fees, slippage, and ETA. Voice-driven via the `propose_bridge` tool — *"Bridge 50 USDC from Base into my vault"* opens the tab pre-filled.
+  2. **LI.FI Earn read paths** sourced into every paid x402 endpoint. `/brief`, `/yield-snapshot`, and `/alert-check` walk Earn pagination at request time, rank by safety, and return cross-chain USDC yield data. Every paid call surfaces an `LI.FI Earn` badge in the Activity log.
+
+  The agent's payment settles on Solana; the data and routes the agent surfaces are cross-chain by design. Solana judges see Solana enforcement; LI.FI judges see real Composer + Earn integration that solves a concrete user problem (cross-chain onboarding into a Solana app).
+- **ElevenLabs prize.** Voice is the only way to start a scheduled task. Conversational Agent with eight bound tools, including `find_idle_assets` and `propose_bridge` (LI.FI free reads) and `start_autonomous_task` (full session opener).
 
 ## Honest limitations
 
