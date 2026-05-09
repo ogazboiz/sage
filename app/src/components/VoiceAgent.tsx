@@ -333,6 +333,22 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
     },
   });
 
+  // Keep the ElevenLabs conversation alive while a confirm card is open.
+  // Without this, ElevenLabs reads silence (user reading the card / wallet
+  // popup) as conversation end, says "timed out", and the contextual
+  // update we send after the user signs lands on a closed websocket.
+  useEffect(() => {
+    if (!pending) return;
+    const id = setInterval(() => {
+      try {
+        conversation.sendUserActivity();
+      } catch (err) {
+        console.warn("[voice] sendUserActivity failed:", err);
+      }
+    }, 4_000);
+    return () => clearInterval(id);
+  }, [pending, conversation]);
+
   if (!AGENT_ID) {
     return (
       <div className="card p-6 space-y-2">
