@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
-import { useAutonomousTask } from "@/hooks/useAutonomousTask";
+import { useAutonomousTaskState } from "@/hooks/useAutonomousTaskContext";
 import { useVaultUsdcBalance } from "@/hooks/useTokenBalances";
 import { buildDecidePolicy, type Shape } from "@/lib/autonomous-decide";
 
@@ -99,7 +99,7 @@ function BudgetHint({
 
 export function AutonomousTaskPanel() {
   const { publicKey } = useWallet();
-  const task = useAutonomousTask();
+  const task = useAutonomousTaskState();
   const vaultBalance = useVaultUsdcBalance();
 
   const [goal, setGoal] = useState(SHAPE_OPTIONS[0]!.sample);

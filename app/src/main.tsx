@@ -9,6 +9,7 @@ import { ConversationProvider } from "@elevenlabs/react";
 
 import "./index.css";
 import App from "./App.tsx";
+import { AutonomousTaskProvider } from "./hooks/useAutonomousTaskContext";
 import { WalletProvider } from "./providers/WalletProvider";
 
 const queryClient = new QueryClient({
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <WalletProvider>
         <ConversationProvider>
-          <App />
+          <AutonomousTaskProvider>
+            <App />
+          </AutonomousTaskProvider>
         </ConversationProvider>
       </WalletProvider>
     </QueryClientProvider>
