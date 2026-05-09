@@ -2,22 +2,18 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-import { BridgeCard } from "@/components/BridgeCard";
-import { BriefingCard } from "@/components/BriefingCard";
+import { AutonomousTaskPanel } from "@/components/AutonomousTaskPanel";
 import { DepositCard } from "@/components/DepositCard";
 import { OnboardingHero } from "@/components/OnboardingHero";
 import { VaultPanel } from "@/components/VaultPanel";
 import { VoiceAgent } from "@/components/VoiceAgent";
-import { YieldList } from "@/components/YieldList";
 
-type Screen = "voice" | "vault" | "bridge" | "yield" | "briefing";
+type Screen = "voice" | "vault" | "activity";
 
 const SCREENS: { key: Screen; n: string; label: string }[] = [
   { key: "voice", n: "01", label: "Talk" },
   { key: "vault", n: "02", label: "Vault" },
-  { key: "bridge", n: "03", label: "Bridge" },
-  { key: "yield", n: "04", label: "Yield" },
-  { key: "briefing", n: "05", label: "Briefing" },
+  { key: "activity", n: "03", label: "Activity" },
 ];
 
 interface ScreenContext {
@@ -57,46 +53,15 @@ function TabIcon({ screen, active }: { screen: Screen; active: boolean }) {
           <path d="M3.5 10h17" stroke={stroke} strokeWidth={sw} />
         </svg>
       );
-    case "bridge":
+    case "activity":
       return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <path
-            d="M3 17V8M21 17V8M3 12c4-2 8-2 12 0s8 2 12 0"
-            stroke={stroke}
-            strokeWidth={sw}
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "yield":
-      return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M4 18l5-6 4 4 7-9"
+            d="M3 12h4l3-7 4 14 3-7h4"
             stroke={stroke}
             strokeWidth={sw}
             strokeLinecap="round"
             strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "briefing":
-      return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect
-            x="4"
-            y="4"
-            width="16"
-            height="16"
-            rx="2"
-            stroke={stroke}
-            strokeWidth={sw}
-          />
-          <path
-            d="M8 9h8M8 13h8M8 17h5"
-            stroke={stroke}
-            strokeWidth={sw}
-            strokeLinecap="round"
           />
         </svg>
       );
@@ -201,15 +166,9 @@ function App() {
             </div>
           )}
 
-          {screen === "yield" && <YieldList />}
-
           {screen === "voice" && <VoiceAgent ctx={ctx} />}
 
-          {screen === "bridge" && <BridgeCard />}
-
-          {screen === "briefing" && (
-            <BriefingCard onGoToVault={() => setScreen("vault")} />
-          )}
+          {screen === "activity" && <AutonomousTaskPanel />}
 
           <footer className="pt-10 pb-6 text-[11px] text-sage-text-dim font-mono flex flex-wrap gap-x-4 gap-y-1">
             <span>devnet</span>
