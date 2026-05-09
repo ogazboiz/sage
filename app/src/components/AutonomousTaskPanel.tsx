@@ -51,6 +51,34 @@ export function AutonomousTaskPanel() {
   const [intervalSeconds, setIntervalSeconds] = useState("30");
   const [durationMinutes, setDurationMinutes] = useState("5");
   const [, setTick] = useState(0); // forces re-render so the countdown ticks
+  const [seededFromVoice, setSeededFromVoice] = useState(false);
+
+  // The voice tool can hand off here via sessionStorage. Pull any pending
+  // autonomous params on mount and pre-fill the form.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem("sage:pending-autonomous");
+    if (!raw) return;
+    sessionStorage.removeItem("sage:pending-autonomous");
+    try {
+      const parsed = JSON.parse(raw) as {
+        goal?: string;
+        budget?: number;
+        intervalSeconds?: number;
+        durationMinutes?: number;
+      };
+      if (typeof parsed.goal === "string") setGoal(parsed.goal);
+      if (typeof parsed.budget === "number")
+        setBudget(parsed.budget.toFixed(2));
+      if (typeof parsed.intervalSeconds === "number")
+        setIntervalSeconds(String(parsed.intervalSeconds));
+      if (typeof parsed.durationMinutes === "number")
+        setDurationMinutes(String(parsed.durationMinutes));
+      setSeededFromVoice(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Re-render once a second while running so the time-remaining counter moves
   useEffect(() => {
@@ -112,6 +140,12 @@ export function AutonomousTaskPanel() {
           ● {task.status}
         </span>
       </div>
+
+      {seededFromVoice && !isRunning && (
+        <div className="rounded-md border border-sage-accent/40 bg-sage-accent-soft px-3 py-2 text-[12px] text-sage-text">
+          Voice agent set up this task. Tap Start to sign the cap.
+        </div>
+      )}
 
       {/* Setup form */}
       {!isRunning && task.status !== "stopping" && (

@@ -151,6 +151,41 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         return "Showed the user a confirm card for the 0.20 USDC briefing. Tell them to tap Confirm on screen, then wait for an update with the result.";
       },
 
+      start_autonomous_task: async (params: Record<string, unknown>) => {
+        const { publicKey } = depsRef.current;
+        if (!publicKey) return "Wallet not connected.";
+        const goal = String(params.goal ?? "").trim();
+        const budget = Number(params.budget);
+        const intervalSeconds = Number(params.intervalSeconds ?? 30);
+        const durationMinutes = Number(params.durationMinutes ?? 5);
+        if (!goal) return "Need a goal sentence.";
+        if (!Number.isFinite(budget) || budget <= 0)
+          return "Need a positive budget.";
+        if (!Number.isFinite(intervalSeconds) || intervalSeconds < 5)
+          return "Interval must be at least 5 seconds.";
+        if (!Number.isFinite(durationMinutes) || durationMinutes <= 0)
+          return "Duration must be positive.";
+
+        // Stash for the Activity tab to pick up
+        try {
+          sessionStorage.setItem(
+            "sage:pending-autonomous",
+            JSON.stringify({
+              goal,
+              budget,
+              intervalSeconds,
+              durationMinutes,
+            }),
+          );
+        } catch {
+          /* sessionStorage unavailable */
+        }
+        ctx?.go("activity");
+        return `Pre-filled the Activity tab with goal "${goal}", $${budget.toFixed(
+          2,
+        )} cap, every ${intervalSeconds}s for ${durationMinutes} min. Tell the user to tap Start to approve the cap on-chain.`;
+      },
+
       propose_yield_deposit: async (
         params: Record<string, unknown>,
       ) => {
@@ -246,8 +281,9 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           {" "}with tools <code className="font-mono">get_vault_status</code>,{" "}
           <code className="font-mono">find_yield</code>,{" "}
           <code className="font-mono">propose_deposit</code>,{" "}
-          <code className="font-mono">propose_yield_deposit</code>, and{" "}
-          <code className="font-mono">pay_briefing</code>.
+          <code className="font-mono">propose_yield_deposit</code>,{" "}
+          <code className="font-mono">pay_briefing</code>, and{" "}
+          <code className="font-mono">start_autonomous_task</code>.
         </p>
       </div>
     );
@@ -352,7 +388,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   // Tool calls observed (V2 timeline) — derive from transcript message lines.
   const toolEvents = transcript.filter((line) =>
-    /(get_vault_status|find_yield|propose_deposit|propose_yield_deposit|pay_briefing)/.test(line),
+    /(get_vault_status|find_yield|propose_deposit|propose_yield_deposit|pay_briefing|start_autonomous_task)/.test(line),
   );
 
   if (!isActive) {
@@ -554,6 +590,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
             "propose_deposit",
             "propose_yield_deposit",
             "pay_briefing",
+            "start_autonomous_task",
           ].map((tool) => {
             const seen = toolEvents.some((e) => e.includes(tool));
             return (
