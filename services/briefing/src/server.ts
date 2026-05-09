@@ -186,7 +186,7 @@ async function fetchTopUsdcVaults(): Promise<EarnVaultLite[]> {
     );
     const res = await fetch(url.toString(), {
       headers: { "x-lifi-api-key": LIFI_API_KEY },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) {
       const text = await res.text();
@@ -281,44 +281,65 @@ function compactUsd(n: number): string {
 
 // Gemini wrapper for prose generation. Falls back to templated text if the
 // key is missing or the API errors. Keeps the demo deterministic on flakes.
+// Retries once on timeout/transient failures since 2.5-flash-lite has slow
+// paths.
 async function geminiSummarise(prompt: string): Promise<string | null> {
   if (!GEMINI_API_KEY) {
     console.warn("[gemini] GEMINI_API_KEY not set");
     return null;
   }
-  try {
-    console.log("[gemini] calling 2.5-flash-lite, prompt length:", prompt.length);
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 240 },
-        }),
-        signal: AbortSignal.timeout(8_000),
-      },
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("[gemini] API error:", res.status, text.slice(0, 240));
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const tag = attempt === 1 ? "" : ` (retry ${attempt - 1})`;
+    try {
+      console.log(
+        `[gemini]${tag} calling 2.5-flash-lite, prompt length:`,
+        prompt.length,
+      );
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 240 },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(
+          `[gemini]${tag} API error:`,
+          res.status,
+          text.slice(0, 240),
+        );
+        // 5xx is worth a retry; 4xx is not
+        if (attempt < 2 && res.status >= 500) continue;
+        return null;
+      }
+      const body = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text === "string" && text.trim()) {
+        console.log(`[gemini]${tag} ok, response length:`, text.trim().length);
+        return text.trim();
+      }
+      console.warn(
+        `[gemini]${tag} empty/missing text in response:`,
+        JSON.stringify(body).slice(0, 240),
+      );
+      if (attempt < 2) continue;
+      return null;
+    } catch (err) {
+      console.error(`[gemini]${tag} threw:`, (err as Error).message);
+      // timeout / network errors retry once
+      if (attempt < 2) continue;
       return null;
     }
-    const body = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text === "string" && text.trim()) {
-      console.log("[gemini] ok, response length:", text.trim().length);
-      return text.trim();
-    }
-    console.warn("[gemini] empty/missing text in response:", JSON.stringify(body).slice(0, 240));
-    return null;
-  } catch (err) {
-    console.error("[gemini] threw:", (err as Error).message);
-    return null;
   }
+  return null;
 }
 
 // ─── Endpoint generators ─────────────────────────────────────────────────
