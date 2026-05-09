@@ -128,7 +128,7 @@ function App() {
       {/* Mobile bottom tab bar — matches wireframe phone nav pattern */}
       {connected && (
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-sage-border safe-bottom">
-          <div className="grid grid-cols-5">
+          <div className="grid grid-cols-4">
             {SCREENS.map((s) => {
               const active = screen === s.key;
               return (
