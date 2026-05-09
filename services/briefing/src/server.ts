@@ -232,8 +232,12 @@ function compactUsd(n: number): string {
 // Gemini wrapper for prose generation. Falls back to templated text if the
 // key is missing or the API errors. Keeps the demo deterministic on flakes.
 async function geminiSummarise(prompt: string): Promise<string | null> {
-  if (!GEMINI_API_KEY) return null;
+  if (!GEMINI_API_KEY) {
+    console.warn("[gemini] GEMINI_API_KEY not set");
+    return null;
+  }
   try {
+    console.log("[gemini] calling 2.5-flash-lite, prompt length:", prompt.length);
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -246,13 +250,23 @@ async function geminiSummarise(prompt: string): Promise<string | null> {
         signal: AbortSignal.timeout(8_000),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[gemini] API error:", res.status, text.slice(0, 240));
+      return null;
+    }
     const body = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-    return typeof text === "string" ? text.trim() : null;
-  } catch {
+    if (typeof text === "string" && text.trim()) {
+      console.log("[gemini] ok, response length:", text.trim().length);
+      return text.trim();
+    }
+    console.warn("[gemini] empty/missing text in response:", JSON.stringify(body).slice(0, 240));
+    return null;
+  } catch (err) {
+    console.error("[gemini] threw:", (err as Error).message);
     return null;
   }
 }
