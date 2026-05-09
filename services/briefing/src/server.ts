@@ -167,38 +167,57 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     return cachedVaults.data;
   }
   // Solana mainnet chainId (1151111081099710) overflows the API's int32
-  // chainId query param (max 2147483647), so we fetch by symbol + sortBy and
-  // filter to Solana client-side.
-  const url = new URL(`${LIFI_EARN_BASE}/v1/vaults`);
-  url.searchParams.set("symbol", "USDC");
-  url.searchParams.set("sortBy", "apy");
-  url.searchParams.set("minTvlUsd", "100000");
-  console.log("[briefing] fetching LI.FI Earn:", url.toString());
-  const res = await fetch(url.toString(), {
-    headers: { "x-lifi-api-key": LIFI_API_KEY },
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("[briefing] LI.FI Earn error:", res.status, text);
-    throw new Error(`LI.FI Earn ${res.status}: ${text}`);
+  // chainId query param. Walk pagination instead, filter to Solana
+  // client-side. Cap at 8 pages so we don't burn rate limit if the index is
+  // huge.
+  const solanaVaults: EarnVaultLite[] = [];
+  let totalSeen = 0;
+  let cursor: string | undefined;
+  for (let page = 0; page < 8; page++) {
+    const url = new URL(`${LIFI_EARN_BASE}/v1/vaults`);
+    url.searchParams.set("symbol", "USDC");
+    url.searchParams.set("sortBy", "tvl");
+    url.searchParams.set("minTvlUsd", "10000");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    console.log(
+      `[briefing] fetching LI.FI Earn page ${page}: ${url.toString()}`,
+    );
+    const res = await fetch(url.toString(), {
+      headers: { "x-lifi-api-key": LIFI_API_KEY },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[briefing] LI.FI Earn error:", res.status, text);
+      throw new Error(`LI.FI Earn ${res.status}: ${text}`);
+    }
+    const body = (await res.json()) as {
+      data: EarnVaultLite[];
+      nextCursor?: string;
+    };
+    const pageData = body.data ?? [];
+    totalSeen += pageData.length;
+    for (const v of pageData) {
+      if (
+        v.chainId === LIFI_SOLANA_CHAIN_ID ||
+        v.network?.toLowerCase() === "solana"
+      ) {
+        solanaVaults.push(v);
+      }
+    }
+    if (!body.nextCursor || pageData.length === 0) break;
+    cursor = body.nextCursor;
+    if (solanaVaults.length >= 12) break; // enough for ranking
   }
-  const body = (await res.json()) as { data: EarnVaultLite[] };
-  const all = body.data ?? [];
-  const solana = all.filter(
-    (v) =>
-      v.chainId === LIFI_SOLANA_CHAIN_ID ||
-      v.network?.toLowerCase() === "solana",
-  );
   console.log(
-    "[briefing] LI.FI returned",
-    all.length,
-    "vaults total,",
-    solana.length,
+    "[briefing] LI.FI walked",
+    totalSeen,
+    "vaults across pages,",
+    solanaVaults.length,
     "on Solana",
   );
-  cachedVaults = { ts: Date.now(), data: solana };
-  return solana;
+  cachedVaults = { ts: Date.now(), data: solanaVaults };
+  return solanaVaults;
 }
 
 function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
