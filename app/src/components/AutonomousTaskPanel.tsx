@@ -24,6 +24,11 @@ const SHAPE_OPTIONS: { value: Shape; label: string; sample: string }[] = [
     label: "Content",
     sample: "Draft a short cross-chain stablecoin yield report",
   },
+  {
+    value: "market",
+    label: "Market",
+    sample: "Track SOL ETH BTC prices",
+  },
   { value: "auto", label: "Auto", sample: "Whatever fits the goal" },
 ];
 
@@ -76,7 +81,9 @@ function BudgetHint({
         ? 0.05 // mostly /alert-check
         : shape === "content"
           ? 0.1 // mix of yield-snapshot, brief, synthesize
-          : 0.07;
+          : shape === "market"
+            ? 0.04 // mostly /market-pulse, occasional /yield-snapshot
+            : 0.07;
   const maxByBudget = Math.floor(budget / avgCost);
   const maxByTime = Math.floor((durationMinutes * 60) / intervalSeconds);
   const fits = Math.min(maxByBudget, maxByTime);
@@ -398,6 +405,7 @@ export function AutonomousTaskPanel() {
                 it.endpoint === "/brief" ||
                 it.endpoint === "/yield-snapshot" ||
                 it.endpoint === "/alert-check";
+              const usesCoinGecko = it.endpoint === "/market-pulse";
               return (
                 <div
                   key={it.signature}
@@ -426,6 +434,11 @@ export function AutonomousTaskPanel() {
                     {usesLifi && (
                       <span className="font-mono text-[9px] uppercase tracking-wider text-sage-accent border border-sage-accent/40 bg-sage-accent-soft rounded px-1.5 py-px">
                         LI.FI Earn
+                      </span>
+                    )}
+                    {usesCoinGecko && (
+                      <span className="font-mono text-[9px] uppercase tracking-wider text-sage-text-dim border border-sage-border-soft rounded px-1.5 py-px">
+                        CoinGecko
                       </span>
                     )}
                   </div>

@@ -89,7 +89,12 @@ export interface DecisionContext {
 }
 
 export interface DecisionResult {
-  endpoint: "/brief" | "/yield-snapshot" | "/alert-check" | "/synthesize";
+  endpoint:
+    | "/brief"
+    | "/yield-snapshot"
+    | "/alert-check"
+    | "/synthesize"
+    | "/market-pulse";
   body?: Record<string, unknown>;
 }
 

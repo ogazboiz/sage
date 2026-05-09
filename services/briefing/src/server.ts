@@ -429,6 +429,76 @@ async function generateYieldSnapshot(goal?: string): Promise<{
   };
 }
 
+// CoinGecko free price endpoint, no key required. The /market-pulse paid
+// endpoint reads from this. Demonstrates that the agent's payment primitive
+// works for any data source, not only LI.FI Earn.
+const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
+
+interface MarketPulseRow {
+  symbol: string;
+  usd: number;
+  change24h: number;
+}
+
+let cachedPulse: { ts: number; rows: MarketPulseRow[] } | null = null;
+
+async function fetchMarketPulse(): Promise<MarketPulseRow[]> {
+  if (cachedPulse && Date.now() - cachedPulse.ts < 60_000) {
+    return cachedPulse.rows;
+  }
+  const url = `${COINGECKO_BASE}/simple/price?ids=solana,ethereum,bitcoin,usd-coin&vs_currencies=usd&include_24hr_change=true`;
+  console.log("[market-pulse] fetching CoinGecko:", url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  if (!res.ok) {
+    console.error("[market-pulse] CoinGecko error:", res.status, await res.text());
+    return [];
+  }
+  const body = (await res.json()) as Record<
+    string,
+    { usd?: number; usd_24h_change?: number }
+  >;
+  const labels: Record<string, string> = {
+    solana: "SOL",
+    ethereum: "ETH",
+    bitcoin: "BTC",
+    "usd-coin": "USDC",
+  };
+  const rows: MarketPulseRow[] = [];
+  for (const id of ["solana", "ethereum", "bitcoin", "usd-coin"]) {
+    const r = body[id];
+    if (!r || typeof r.usd !== "number") continue;
+    rows.push({
+      symbol: labels[id] ?? id,
+      usd: r.usd,
+      change24h: typeof r.usd_24h_change === "number" ? r.usd_24h_change : 0,
+    });
+  }
+  console.log("[market-pulse] returned", rows.length, "rows");
+  cachedPulse = { ts: Date.now(), rows };
+  return rows;
+}
+
+async function generateMarketPulse(): Promise<{
+  ts: string;
+  rows: MarketPulseRow[];
+  oneLine: string;
+}> {
+  const ts = new Date().toISOString();
+  const rows = await fetchMarketPulse().catch(() => []);
+  const oneLine =
+    rows.length === 0
+      ? "Market pulse unavailable."
+      : rows
+          .map(
+            (r) =>
+              `${r.symbol} $${r.usd.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })} (${r.change24h >= 0 ? "+" : ""}${r.change24h.toFixed(1)}%)`,
+          )
+          .join(" · ");
+  return { ts, rows, oneLine };
+}
+
 // In-memory tier history per slug. The /alert-check endpoint compares the
 // current tier (top-3 / outside-top-3 / unranked) to the last seen tier and
 // reports a change if any.
@@ -578,7 +648,13 @@ app.use((_, res, next) => {
   next();
 });
 
-const PAID_ROUTES = ["/brief", "/yield-snapshot", "/alert-check", "/synthesize"];
+const PAID_ROUTES = [
+  "/brief",
+  "/yield-snapshot",
+  "/alert-check",
+  "/synthesize",
+  "/market-pulse",
+];
 for (const route of PAID_ROUTES) {
   app.options(route, (_, res) => res.status(204).end());
 }
@@ -624,6 +700,17 @@ app.post(
     const input = typeof req.body?.input === "string" ? req.body.input : "";
     const synthesis = await generateSynthesis(input);
     return { body: { synthesis } };
+  }),
+);
+
+// Non-yield endpoint to prove the primitive works for any data, not only
+// LI.FI Earn. Reads SOL/ETH/BTC/USDC prices from CoinGecko's free tier,
+// $0.03 per call.
+app.post(
+  "/market-pulse",
+  paidEndpoint("market-pulse", 0.03, async () => {
+    const pulse = await generateMarketPulse();
+    return { body: pulse };
   }),
 );
 
@@ -689,6 +776,7 @@ app.get("/services", (_, res) => {
       { endpoint: "/yield-snapshot", price: 0.05, description: "Top 3 USDC vaults across chains right now" },
       { endpoint: "/alert-check", price: 0.05, description: "Did this vault's tier change?" },
       { endpoint: "/synthesize", price: 0.1, description: "Synthesize accumulated context into prose" },
+      { endpoint: "/market-pulse", price: 0.03, description: "Current SOL/ETH/BTC/USDC prices + 24h change from CoinGecko" },
     ],
     treasury: TREASURY.toBase58(),
     mint: MINT.toBase58(),

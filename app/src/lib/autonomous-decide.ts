@@ -13,7 +13,7 @@ import type {
 // context. Results from earlier ticks influence later choices (e.g. if a
 // /yield-snapshot shows a tier change, the next tick escalates to
 // /synthesize).
-export type Shape = "briefing" | "monitor" | "content" | "auto";
+export type Shape = "briefing" | "monitor" | "content" | "market" | "auto";
 
 interface PolicyInput {
   goal: string;
@@ -34,12 +34,26 @@ const CONTENT_KEYWORDS = [
   "post",
 ];
 const BRIEFING_KEYWORDS = ["brief", "briefing", "update", "rundown"];
+const MARKET_KEYWORDS = [
+  "market",
+  "price",
+  "prices",
+  "pulse",
+  "sol",
+  "eth",
+  "btc",
+  "ticker",
+];
 
 function detectShape(goal: string): Shape {
   const g = goal.toLowerCase();
+  const market = MARKET_KEYWORDS.some((k) =>
+    new RegExp(`\\b${k}\\b`).test(g),
+  );
   const monitor = MONITOR_KEYWORDS.some((k) => g.includes(k));
   const content = CONTENT_KEYWORDS.some((k) => g.includes(k));
   const briefing = BRIEFING_KEYWORDS.some((k) => g.includes(k));
+  if (market) return "market";
   if (monitor) return "monitor";
   if (content) return "content";
   if (briefing) return "briefing";
@@ -115,10 +129,24 @@ export function buildDecidePolicy(
       return { endpoint: "/alert-check", body: { slug } };
     }
 
-    // auto: fall back to the briefing pattern, mostly cheap snapshots with a
-    // periodic full brief
+    if (shape === "market") {
+      // Market pulse loop: cheap CoinGecko price snapshots every tick. Every
+      // fifth tick (or first), if the budget allows, fold in a yield read so
+      // the agent has cross-chain DeFi context alongside the market quote.
+      if (iteration % 5 === 0 && budgetRemaining >= 0.05) {
+        return { endpoint: "/yield-snapshot", body: { goal: ctx.goal } };
+      }
+      return { endpoint: "/market-pulse" };
+    }
+
+    // auto: cheap status calls with one full brief at the start. Fold in a
+    // market pulse on the second tick so the activity log shows multiple
+    // data sources, not just LI.FI.
     if (iteration === 0 && budgetRemaining >= 0.2) {
       return { endpoint: "/brief", body: { goal: ctx.goal } };
+    }
+    if (iteration === 1 && budgetRemaining >= 0.03) {
+      return { endpoint: "/market-pulse" };
     }
     return { endpoint: "/yield-snapshot", body: { goal: ctx.goal } };
   };
