@@ -232,7 +232,9 @@ const HIGH_RISK_TVL = 2_000_000;
 // Hard ceiling: anything claiming >1000% APY is a data error or an
 // extreme outlier; surface it nowhere.
 const ABSURD_APY = 1_000;
-const PROTOCOL_DIVERSITY_CAP = 3;
+// One vault per protocol in the ranked output. A "top 3" should show three
+// different protocols, not three pools from the same one.
+const PROTOCOL_DIVERSITY_CAP = 1;
 
 function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
   const ranked = vaults
