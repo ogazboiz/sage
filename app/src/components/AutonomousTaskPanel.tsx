@@ -277,32 +277,48 @@ export function AutonomousTaskPanel() {
         <div className="space-y-2">
           <p className="label-mono">Activity</p>
           <div className="space-y-1.5">
-            {[...task.iterations].reverse().map((it) => (
-              <div
-                key={it.signature}
-                className="card bg-white p-3 space-y-1"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="font-mono text-[12px] font-semibold text-sage-text">
-                    {it.endpoint}
-                  </p>
-                  <span className="num-mono text-[12px] text-sage-text-dim">
-                    -${it.amount.toFixed(2)}
-                  </span>
-                </div>
-                <p className="text-[12px] text-sage-text leading-snug line-clamp-2">
-                  {it.result}
-                </p>
-                <a
-                  href={txUrl(it.signature)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-[10px] text-sage-text-dim hover:text-sage-accent"
+            {[...task.iterations].reverse().map((it) => {
+              // Endpoints that pull live LI.FI Earn data inside the briefing
+              // service. Surfacing the badge tells a judge at a glance:
+              // "the agent is paying USDC on Solana to read LI.FI data."
+              const usesLifi =
+                it.endpoint === "/brief" ||
+                it.endpoint === "/yield-snapshot" ||
+                it.endpoint === "/alert-check";
+              return (
+                <div
+                  key={it.signature}
+                  className="card bg-white p-3 space-y-1"
                 >
-                  tx {shortSig(it.signature)} ↗
-                </a>
-              </div>
-            ))}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-mono text-[12px] font-semibold text-sage-text">
+                      {it.endpoint}
+                    </p>
+                    <span className="num-mono text-[12px] text-sage-text-dim">
+                      -${it.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-sage-text leading-snug line-clamp-2">
+                    {it.result}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={txUrl(it.signature)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[10px] text-sage-text-dim hover:text-sage-accent"
+                    >
+                      tx {shortSig(it.signature)} ↗
+                    </a>
+                    {usesLifi && (
+                      <span className="font-mono text-[9px] uppercase tracking-wider text-sage-accent border border-sage-accent/40 bg-sage-accent-soft rounded px-1.5 py-px">
+                        LI.FI Earn
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

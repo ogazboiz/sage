@@ -103,12 +103,14 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
     ? Number(vaultQuery.data.totalSpent.toString()) / 1_000_000
     : 0;
   const exists = Boolean(vaultQuery.data);
-  const idle = balanceUsd;
-  const deployed = totalDeployed;
   const activeTask = vaultQuery.data?.activeTask ?? null;
   const taskBudgetRemaining = activeTask
     ? Number(activeTask.budgetRemaining.toString()) / 1_000_000
     : 0;
+  // Reserved = the cap currently locked in an open task (program-enforced).
+  // Idle = vault balance minus what is reserved (free to start a new task).
+  const reserved = taskBudgetRemaining;
+  const idle = Math.max(balanceUsd - reserved, 0);
 
   return (
     <div className="grid md:grid-cols-[1.2fr_1fr] gap-5">
@@ -123,10 +125,14 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
           <div className="flex flex-wrap gap-1.5 pt-1">
             {exists ? (
               <>
-                <span className="pill">${deployed.toFixed(2)} deployed</span>
                 <span className="pill pill-accent">
                   ${idle.toFixed(2)} idle
                 </span>
+                {reserved > 0 && (
+                  <span className="pill pill-warning">
+                    ${reserved.toFixed(2)} reserved
+                  </span>
+                )}
                 <span className="pill">${totalSpent.toFixed(2)} spent</span>
               </>
             ) : (

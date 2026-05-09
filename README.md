@@ -1,211 +1,197 @@
 # Sage
 
-> Voice-first AI agent wallet for Solana. Talk to it. It manages an on-chain budget, finds yield via LI.FI, pays for services per call via x402, and onboards funds from any chain. Every spending guarantee is enforced by the program, not the UI.
+> Set an AI agent loose on a recurring paid task. Walk away. The Solana program is the only thing keeping it inside its budget.
 
-**Status:** built for the dev3pack hackathon.
+Sage gives an AI agent a per-task spending cap on Solana. The user signs once. The agent runs on a schedule, paying x402 services with its own keypair, with every cent enforced by an Anchor program. When the cap hits zero, the program rejects the next release. The agent stops itself.
+
+**Built for the dev3pack hackathon.** Solana program shipped, voice + LI.FI + x402 + autonomous-loop all wired.
 
 ---
 
-## What it does
+## The pitch in one paragraph
 
-You speak. Sage listens, plans, quotes the cost out loud, waits for your "yes," and executes on Solana.
+AI agents are starting to spend money on the internet. Today they get full wallet access (unsafe), use a hosted custodial service (trust required), or sign every micropayment by hand (defeats the agent). There is no on-chain primitive that says *"this agent can spend up to $X for this task and nothing else."* Sage is that primitive on Solana, with four reference paid services to prove the loop carries: live LI.FI Earn briefings, yield snapshots, alert checks, and Gemini synthesis. Voice opens the task; the program enforces every release; the agent walks itself to zero.
 
-- **Voice in, voice out.** ElevenLabs Conversational Agents with bound tools, not TTS-only.
-- **On-chain budget vault.** An Anchor program (`sage_vault`) holds your USDC. Per-task locking, just-in-time release, auto-refund of unspent budget, owner-only withdrawals. No custodial server, no soft caps.
-- **Cross-chain onboarding.** LI.FI Composer routes USDC from any source chain into Solana, landing in the user's vault.
-- **Solana yield discovery.** LI.FI Earn API filtered to Solana destinations, ranked by intent (safest, highest, balanced) with a risk filter that flags reward-heavy, APY-spiked, declining, or micro-TVL vaults.
-- **Pay-per-call services.** The agent pays an x402 endpoint on Solana SPL USDC for a specialist service (e.g. a DeFi briefing). Settlement is verifiable on-chain.
-
-## Tracks
-
-**Primary:**
-
-- **Solana — Best App Overall.** Novel Anchor program with on-chain agent budget guarantees.
-- **Solana — x402 bonus.** A real x402 endpoint settled in USDC SPL on Solana.
-- **LI.FI — Cross-Chain UX.** Earn API for vault discovery + Composer for cross-chain quotes.
-- **ElevenLabs — Best Integration.** Conversational Agents with four bound tools, voice as the trigger for on-chain actions.
-
-**Stretch:** Solana Mobile — Expo + Mobile Wallet Adapter port. Reuses the framework-agnostic `app/src/lib/` core. Submitted only after the web build is fully filed.
-
-## Screens
-
-Sage is a five-tab single-page app. Layout deliberately leads with voice — that's the differentiator.
-
-| # | Tab | What it is |
-|---|---|---|
-| 01 | **Talk** | Voice-first home. Idle: orb + "Start talking" + your vault balance. Active: dark CarPlay-style hero with the agent's last spoken line as a subtitle, plus a tool-call timeline rail (`get_vault_status` / `find_yield` / `propose_deposit` / `pay_briefing`). |
-| 02 | **Vault** | 1.2fr / 1fr dashboard. Left: balance card with deployed/idle/spent pills, 3-up actions (Fund / Refresh / Find yield), active-task progress, addresses block. Right: ledger of recent on-chain activity. |
-| 03 | **Bridge** | LI.FI Composer source ↔ destination cards with chain dots, big mono amounts, and a route summary (best route / bridge fee / slippage / min received) all wired to a real `/v1/quote` call. |
-| 04 | **Yield** | LI.FI Earn ranked list. Segmented sort tabs (Safest / Highest APY / Balanced), symbol filter pills (All / USDC / USDT / SOL), caution toggle. Each row: rank circle, protocol + chain, risk pill, APY in mono. |
-| 05 | **Briefing** | x402 paid task. Fetches a live 402 challenge from `services/briefing`, displays quote/recipient/refund/network/nonce/expiry. Pay flow runs `approve_task → release_step → memo → complete_task` atomically. After settlement: receipt mode with briefing text and on-chain proof. **Gates on vault state** — shows a "vault required" card if no vault, or "insufficient balance" if vault is empty, with a one-click jump to the Vault tab. |
-
-Pre-connect, the app shows an **onboarding hero** (the design's `ConnectWebV3` split layout) explaining the three-step model (Connect → Fund → Talk) with a live preview pane. After connecting any wallet-standard wallet (Backpack / Phantom / Solflare), the app lands on **Talk**.
-
-## Architecture
+## How it works
 
 ```
-Voice in (mic)
-    │
-    ▼
-ElevenLabs Conversational Agent (tool calls)
-    │
-    ▼
-Web app (Vite + React)
-    │
-    ├──► Solana wallet adapter (Phantom + Solflare)
-    │
-    ├──► LI.FI Earn API ──► Solana vault list (ranked, risk-filtered)
-    ├──► LI.FI Composer ──► cross-chain quote / route
-    │
-    ├──► Anchor program: sage_vault
-    │     ├─ init_user_vault
-    │     ├─ deposit
-    │     ├─ approve_task
-    │     ├─ release_step
-    │     ├─ complete_task
-    │     ├─ withdraw
-    │     └─ force_complete_stale_task
-    │
-    └──► x402 endpoint (services/briefing)
-              SPL USDC on Solana, on-chain verification, replay protection
+voice command  →  start_autonomous_task tool  →  user signs approve_task once
+                                                       ↓
+              browser-side agent_keypair takes over
+                                                       ↓
+   ┌──────────────────────────────────────────────────────────────┐
+   │  every N seconds:                                            │
+   │    decide which paid endpoint to call (briefing? snapshot?)  │
+   │    sign release_step + memo with agent_keypair               │
+   │    settle x402 with the service treasury                     │
+   │    speak result back through voice                            │
+   └──────────────────────────────────────────────────────────────┘
+                                                       ↓
+                program rejects the next release at $0.00
+                                                       ↓
+                  complete_task fires, leftover budget refunded
 ```
 
-## Anchor program — `sage_vault`
+One signature, then walk away. Nothing else is required from the user.
 
-Program ID (devnet): [`64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ`](https://solscan.io/account/64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ?cluster=devnet)
+## The Solana program
 
-### Instructions
+`sage_vault` (deployed devnet `64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ`)
 
 | Instruction | Signer | Purpose |
 |---|---|---|
-| `init_user_vault(agent_keypair)` | owner | Creates the vault PDA + USDC ATA owned by the PDA |
-| `deposit(amount)` | owner | Transfers USDC from owner ATA into vault ATA |
-| `approve_task(task_id, budget, expires_at)` | owner | Locks budget against an active task. Rejects if a task is already active. Bound by `MAX_TASK_DURATION_SECONDS`. |
-| `release_step(task_id, amount)` | owner OR agent | Vault → recipient ATA via PDA-signed CPI. Capped by remaining budget on-chain. |
-| `complete_task(task_id)` | owner OR agent | Clears the active task. Unspent budget stays in vault. |
-| `withdraw(amount)` | owner | Vault → owner. Rejected while a task is active. |
-| `force_complete_stale_task(task_id)` | anyone | Recovery. Allowed only after `expires_at + STALE_TASK_GRACE_SECONDS`. |
+| `init_user_vault(agent_keypair)` | owner | Create a budget account, register an alternate signer |
+| `deposit(amount)` | owner | Fund the vault with USDC |
+| `approve_task(task_id, budget, expires_at)` | **owner** | Open a task with a hard cap and expiry |
+| `release_step(task_id, amount, recipient)` | **owner OR agent_keypair** | Release ≤ remaining budget |
+| `complete_task(task_id)` | owner OR agent_keypair | Close the task, refund unspent |
+| `withdraw(amount)` | owner | Pull funds out (only when no task active) |
+| `force_complete_stale_task(task_id)` | anyone | Recovery path after expiry + 30 min |
 
-### State machine invariants (all enforced on-chain)
+Three invariants, enforced on-chain:
 
-1. Cannot withdraw while a task is active.
-2. Cannot start a second task while one is active.
-3. `release_step` cannot exceed remaining budget.
-4. Force-complete only after the grace period.
-5. Owner authorisation required for all state changes except force-complete.
+- A `release_step` cannot exceed remaining budget.
+- One task open at a time.
+- Withdrawal is blocked while a task is active.
 
-A full sequence (init → deposit → approve_task → release_step → complete_task → withdraw) is exercised in [`app/scripts/smoke-test.ts`](app/scripts/smoke-test.ts) and passes on devnet.
+The owner / agent_keypair split is what makes autonomy work. The user signs `approve_task` once with their wallet. The browser-side agent keypair signs every subsequent `release_step` without further wallet popups. The program's authority check enforces both keys are valid signers. **Removing the program lets the agent drain the wallet. The program is the safety primitive.**
 
-## x402 paid endpoint
+## The four paid endpoints
 
-Service: [`services/briefing`](services/briefing) (Express, runs at `:3001`)
+`services/briefing/src/server.ts`. All x402-spec, all settle real Solana SPL USDC against the treasury, all gated by per-endpoint nonces.
 
-Flow:
+| Endpoint | Price | Returns |
+|---|---|---|
+| `POST /brief` | 0.20 USDC | Long-form Solana DeFi briefing, LI.FI Earn data + Gemini synthesis |
+| `POST /yield-snapshot` | 0.05 USDC | Top 3 USDC vaults right now, one-line summary |
+| `POST /alert-check` | 0.05 USDC | Did the named vault tier change since last check? |
+| `POST /synthesize` | 0.10 USDC | Take agent context, return a paragraph |
 
-1. `POST /brief` without payment → `402` with `{ amount, mint, recipient, nonce, expiresIn }`
-2. Client sends an SPL USDC transfer to the treasury ATA, with the nonce written into a `spl-memo` instruction **in the same transaction** as the vault PDA's `approve_task → release_step → complete_task` Anchor calls. This atomic flow keeps the agent's wallet at $0 between steps — the property that makes Sage trustless.
-3. Client retries with `X-Payment: <signature>` and `X-Payment-Nonce: <nonce>`
-4. Server verifies on-chain via `getParsedTransaction`, matches recipient ATA, amount, and memo nonce
-5. Returns the briefing text
+The agent picks among these per tick based on the goal. *"Watch Marginfi every 30 seconds, alert me on tier change"* fires `/alert-check` repeatedly and only escalates to `/synthesize` when something actually moves. *"Brief me on Solana DeFi every minute"* alternates `/brief` and `/yield-snapshot`.
 
-Replay protection: each nonce is single-use, tracked in memory with TTL.
+A discovery endpoint at `GET /services` returns the list. **The pattern generalises: any developer can add a fifth endpoint with three lines of `paidEndpoint(name, price, handler)`.**
 
-End-to-end test in [`services/briefing/scripts/x402-test.ts`](services/briefing/scripts/x402-test.ts) settles 0.20 USDC on devnet and returns the briefing.
+## The HexKit lineage
 
-**Verification tx (devnet):** [`25x87eRE5ni2hVi1rfUbobmiJFtPnwhAFfeGe92RpjA3kxgRfwuh9WtWLU2xSGKgraos66sZn55FeJVqiCupktx2`](https://solscan.io/tx/25x87eRE5ni2hVi1rfUbobmiJFtPnwhAFfeGe92RpjA3kxgRfwuh9WtWLU2xSGKgraos66sZn55FeJVqiCupktx2?cluster=devnet)
+The intelligence under `/brief` and `/yield-snapshot` is HexKit's ranking engine, lifted into `app/src/lib/ranker/`. The source files literally say *"Lifted and trimmed from HexKit."*
 
-### Faremeter compatibility
+| HexKit feature | In Sage | Where |
+|---|---|---|
+| Risk filter (reward-heavy, apy-spike, declining-yield, micro-tvl) | yes | `app/src/lib/ranker/risk-filter.ts` |
+| Symbol aliases (USDC ↔ USDC.e ↔ USDBC) | yes | `app/src/lib/ranker/aliases.ts` |
+| Vault ranker (safest / highest / balanced + 3-protocol diversity cap) | yes | `app/src/lib/ranker/rank.ts` |
+| LI.FI Earn data ingestion + risk classification | yes | `app/src/lib/lifi/earn.ts`, briefing service |
+| Gemini rationale | yes | `services/briefing/src/server.ts:geminiSummarise` |
 
-The Solana Foundation's listed x402 stack on [solana.com/x402](https://solana.com/x402) includes **[Faremeter](https://github.com/faremeter/faremeter)** — an OSS framework for agentic payments. Sage runs a custom `x402-solana` scheme that follows the same protocol shape (HTTP 402 challenge → SPL transfer → on-chain verification → 200 with content). We implemented our own verifier rather than adopting Faremeter's facilitator architecture for one reason: Faremeter's `exact` scheme expects a plain SPL transfer that the facilitator constructs, which would force our `approve_task → release_step → complete_task` Anchor flow to be split across pre/post-payment hooks. That breaks the property the project pitch is built on — that the agent's wallet holds $0 between steps. Migration to Faremeter is a half-day refactor post-hackathon: replace the Express handler with `@faremeter/middleware`, run the bundled facilitator, and restructure the vault calls into pre/post-payment hooks (or write a custom Faremeter scheme that wraps the atomic transaction).
+What's not here, deliberately:
+- LI.FI Composer execute for cross-chain top-up requires canonical USDC (mainnet); on devnet the route is quote-only. README documents the mainnet swap path.
+- Composer execute for protocol vault deposit (Marginfi / Kamino / Solend) requires a stable devnet bank with a fresh oracle. Their devnet sandboxes are unreliable. The Sage program already exposes the pattern (`release_step` to any recipient ATA); a v2 deployment on mainnet would CPI directly.
 
-## LI.FI integration
+**Sage is HexKit's ranker plus CleverCon's vault primitive plus a scheduler, on Solana.** That synthesis is what's new.
 
-**Earn API** (`/v1/earn/vaults`): paginated walk over Solana destination vaults. Filtered, then ranked by intent (safest = TVL, highest = APY, balanced = 55/45 weighted). Risk classifier flags reward-heavy, APY-spiked, declining-yield, and micro-TVL vaults. Lifted from HexKit, framework-agnostic in [`app/src/lib/ranker`](app/src/lib/ranker).
+## The voice agent
 
-**Composer API** (`/v1/quote`): real cross-chain routes from EVM source chains into Solana USDC. Verified working: 10 USDC on Base → 9.79 USDC on Solana via Across in ~2s.
+ElevenLabs Conversational Agent with seven bound tools:
 
-Both APIs are proxied server-side through Vite so the LI.FI API key never enters the bundle.
+| Tool | Cost | Purpose |
+|---|---|---|
+| `get_vault_status()` | free | Read vault balance + active task |
+| `find_yield(intent)` | free | Top 3 vaults from LI.FI Earn, ranked + filtered |
+| `find_idle_assets()` | free | Idle USDC in user's wallet + suggested deployment |
+| `propose_deposit(amount)` | wallet sig | Surface a confirm card; user clicks Confirm to sign |
+| `propose_yield_deposit(slug, amount)` | wallet sig | Same, for a yield slug from the ranker |
+| `pay_briefing()` | wallet sig | One-shot paid `/brief` call |
+| `start_autonomous_task(goal, budget, intervalSeconds, durationMinutes)` | wallet sig | Open an autonomous task, hand off to Activity tab |
 
-## ElevenLabs Conversational Agent
-
-Four client tools registered with the agent:
-
-- `get_vault_status()` — reads `UserVault` and returns balance + active task as JSON
-- `find_yield(intent: string)` — runs the LI.FI ranker pipeline, returns top 3 candidates with rationale
-- `propose_deposit(amount: number)` — triggers wallet popup deposit, returns tx signature
-- `pay_briefing()` — atomic 5-instruction tx: ATA-create + approve_task + release_step + memo + complete_task, then settles with the x402 endpoint and returns the briefing for the agent to read aloud
-
-The voice agent acts as the orchestrator, with on-chain actions enforced by the program.
+All wallet-touching tools surface a confirm card in the UI. The user click is the user gesture wallets need; the click triggers the actual signature. After each signed transaction, the result is pushed back to the agent via `sendContextualUpdate` so it can speak the outcome.
 
 ## Tech stack
 
 | Layer | Choice |
 |---|---|
-| Solana program | Anchor 1.0 |
+| Solana program | Anchor 1.0.2 |
 | Frontend | Vite + React 19 + Tailwind v4 |
-| Wallet | `@solana/wallet-adapter` (Phantom, Solflare, Backpack via wallet-standard) |
-| LI.FI | REST proxy (`/v1/earn`, `/v1/quote`) |
-| Voice | `@elevenlabs/react` Conversational Agent |
-| x402 service | Express + `@solana/spl-token` parsed-tx verification |
-| RPC | Solana devnet (override via `VITE_SOLANA_RPC`) |
+| Wallet | `@solana/wallet-adapter` (Phantom / Solflare / Backpack via wallet-standard) |
+| Voice | `@elevenlabs/react` Conversational Agents over websocket |
+| Yield data | LI.FI Earn (`/v1/vaults`) |
+| Cross-chain | LI.FI Composer (`/v1/quote`) — quote on devnet, real execute on mainnet |
+| LLM | Gemini 2.5 Flash Lite for prose, deterministic fallback when key missing |
+| x402 | Custom Solana SPL implementation, nonce-pinned per endpoint |
+| Hosting | Vercel for app, local node for briefing service |
+| RPC | devnet (Helius dedicated optional) |
 
-## Solana ecosystem alignment
+## Setup
 
-The build follows the [Solana Agent Skills](https://github.com/solana-foundation/solana-dev-skill) playbook where it applies:
-
-- **Frontend with framework-kit** — single client instance, wallet-standard-first connection (Backpack / Phantom / Solflare auto-detected via the standard channel), minimal client footprint. We list zero legacy adapters in `WalletProvider`.
-- **IDL & client code generation** — Anchor's TS type emitter at `target/types/sage_vault.ts` is the source of truth for `app/src/lib/sage-sdk` instead of hand-rolled serializers.
-- **Testing strategy** — `programs/sage_vault/` ships a litesvm test plus `app/scripts/smoke-test.ts` that exercises every instruction (init → deposit → approve_task → release_step → complete_task → withdraw) against the deployed devnet program.
-- **Security checklist** — owner / agent-keypair signer gating, PDA `bump = user_vault.bump` constraints, `has_one = owner` on every state-mutating instruction, single-active-task invariant, force-complete grace window.
-- **Common errors & solutions / version compatibility** — toolchain pinned (Anchor 1.0.2, Solana CLI 3.1.14, Rust pinned by `rust-toolchain.toml`).
-- **Payments & commerce / x402** — Sage's `services/briefing` is the x402 paywall; see [`x402 paid endpoint`](#x402-paid-endpoint) above for the protocol shape and Faremeter migration plan.
-
-Skills not applied (out of scope for the demo): Confidential Transfers, Kit ↔ web3.js Interop (we sit on `@solana/web3.js` v1 throughout).
-
-## Deployed addresses
-
-| Item | Network | Address |
-|---|---|---|
-| `sage_vault` program | Devnet | [`64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ`](https://solscan.io/account/64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ?cluster=devnet) |
-| Sage test USDC mint | Devnet | [`EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon`](https://solscan.io/account/EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon?cluster=devnet) |
-| x402 settlement (proof) | Devnet | [`25x87eRE5n…JVqiCupktx2`](https://solscan.io/tx/25x87eRE5ni2hVi1rfUbobmiJFtPnwhAFfeGe92RpjA3kxgRfwuh9WtWLU2xSGKgraos66sZn55FeJVqiCupktx2?cluster=devnet) |
-
-## Local setup
-
-Prerequisites: Rust + cargo, Solana CLI (Anza installer), Anchor (via avm), Node 20+, pnpm.
+Requires Node 20+, pnpm, Solana CLI, Anchor 1.0.2.
 
 ```bash
-git clone https://github.com/ogazboiz/sage.git
-cd sage
+# Install workspace
+pnpm install
 
-# 1. Build + verify the program
-anchor build
-./app/node_modules/.bin/tsx app/scripts/smoke-test.ts   # exercises all 7 ixs on devnet
+# 1. Briefing service
+cd services/briefing
+pnpm dev   # listens on :3001
 
-# 2. Mint test USDC to whichever wallet you'll connect
-./app/node_modules/.bin/tsx app/scripts/mint-to.ts <YOUR_WALLET_PUBKEY> 100
-
-# 3. Run the x402 briefing service
-cd services/briefing && pnpm install && pnpm dev      # :3001
-
-# 4. Run the web app (separate terminal)
-cd app && pnpm install && pnpm dev                    # :5173
+# 2. App
+cd ../../app
+pnpm dev   # http://localhost:5173
 ```
 
-Environment (`app/.env.local`):
+Env file at `app/.env.local`:
 
 ```
-VITE_SAGE_USDC_MINT=EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon
-VITE_SOLANA_RPC=https://api.devnet.solana.com
-VITE_ELEVENLABS_AGENT_ID=         # create at elevenlabs.io/app/conversational-ai
-LIFI_API_KEY=                     # optional; LI.FI Earn works without
-GEMINI_API_KEY=
+VITE_ELEVENLABS_AGENT_ID=agent_xxx
+ELEVENLABS_API_KEY=sk_xxx
+LIFI_API_KEY=xxx
+GEMINI_API_KEY=xxx
 ```
 
-## Demo video
+The briefing service auto-loads `app/.env.local` via Node's `--env-file-if-exists`.
 
-Coming with the submission. The 3-min walkthrough covers: voice deposit, voice yield discovery, voice-triggered x402 paid briefing with on-chain settlement.
+## Live addresses
 
-## License
+| | |
+|---|---|
+| Sage program (devnet) | `64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ` |
+| USDC test mint (devnet) | `EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon` |
+| Treasury (devnet) | `HKDKTVqJYfwZwSXMZiFKHe75bykunBFQUZW5gv6frYvw` |
 
-MIT
+## Demo paths to try
+
+**1. Manual autonomous loop.** Vault tab → init + deposit ≥ $1 → Activity tab → Briefing shape, $0.50 cap, 30s interval, 2min duration → Start. Sign twice (SOL drip, then approve_task). Watch the loop fire `/brief` and `/yield-snapshot` calls, vault counter ticking down, every iteration linkable on solscan-devnet.
+
+**2. Voice-triggered loop.** Talk → *"Run a Solana DeFi briefing every 30 seconds for 2 minutes, max one dollar."* Voice agent calls `start_autonomous_task`, app navigates to Activity, form pre-fills. Click Start.
+
+**3. Idle-asset query.** Talk → *"What's idle?"* Voice agent calls `find_idle_assets`, reports USDC sitting outside the vault and suggests where it could earn.
+
+## Track alignment
+
+- **Solana Best App.** Novel `agent_keypair` pattern actually load-bearing. Atomic instruction sequences. Demo moment: program rejects the agent at $0.00.
+- **Solana x402 bonus.** Every loop iteration is a real Solana SPL settlement against a paid endpoint. Four endpoints, all spec-compliant.
+- **LI.FI prize.** LI.FI Earn is the data layer the agent pays USDC to read, on every `/brief`, `/yield-snapshot`, `/alert-check` call. Every paid call surfaces an `LI.FI Earn` badge in the Activity log.
+- **ElevenLabs prize.** Voice is the only way to start a scheduled task. Conversational Agent with seven bound tools, including `find_idle_assets` (LI.FI free read) and `start_autonomous_task` (full session opener).
+
+## Honest limitations
+
+- Loop runs in the browser. Closing the tab stops the loop. The active task remains open on-chain and unsticks via `force_complete_stale_task` after expiry + 30 minutes. Production: move the loop to a worker / serverless cron.
+- Devnet mint is custom, so LI.FI Composer cross-chain execute and real protocol deposits require mainnet. Quote works on devnet. Mainnet swap is a 30-minute config change (mint constant, RPC, redeploy) — the program does not change.
+- Gemini failures fall back to templated prose. Briefings still carry live LI.FI numbers either way.
+
+## Repo
+
+```
+sage/
+├── programs/sage_vault/          Anchor program
+├── services/briefing/            Four x402 paid endpoints, Express + Gemini
+├── app/                          Vite + React frontend
+│   ├── src/lib/sage-sdk/         Anchor IDL + program client
+│   ├── src/lib/ranker/           HexKit ranker + risk filter (lifted)
+│   ├── src/lib/lifi/             LI.FI Earn + Composer clients
+│   ├── src/lib/x402/             x402 client (challenge + settle)
+│   ├── src/hooks/useAutonomousTask.ts   Agent-keypair loop primitive
+│   ├── src/lib/autonomous-decide.ts     Per-tick decision policy
+│   └── src/components/AutonomousTaskPanel.tsx   Activity tab
+└── PRD.md                        Product spec, locked v3
+```
+
+Built on the shoulders of Toll, RenderGate, x402-mcp-stellar-template, CleverCon, HexKit, and Cards402 — every prior project pointed at the same thesis. Sage is the Solana chapter.

@@ -14,7 +14,7 @@ import { snapshotVault, type SageProgram } from "@/lib/sage-sdk";
 import type { ClientTools } from "@elevenlabs/react";
 import type { PublicKey } from "@solana/web3.js";
 import type { ScreenContext } from "@/App";
-import { useVaultUsdcBalance } from "@/hooks/useTokenBalances";
+import { useOwnerUsdcBalance, useVaultUsdcBalance } from "@/hooks/useTokenBalances";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 
@@ -25,6 +25,8 @@ interface ToolDeps {
   deposit: ReturnType<typeof useDeposit>;
   payBriefing: ReturnType<typeof usePayBriefing>;
   deployYield: ReturnType<typeof useDeployYield>;
+  ownerUsdcBalance: number | null | undefined;
+  vaultUsdcBalance: number | null | undefined;
 }
 
 // Voice tools cannot pop a wallet directly: the call originates inside an
@@ -49,6 +51,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
   const { publicKey } = useWallet();
   const { connection: _connection } = useConnection();
   const vaultBalance = useVaultUsdcBalance();
+  const ownerBalance = useOwnerUsdcBalance();
   const vaults = useSolanaVaults({
     targetSymbol: "USDC",
     objective: "safest",
@@ -75,6 +78,8 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
     deposit,
     payBriefing,
     deployYield,
+    ownerUsdcBalance: undefined,
+    vaultUsdcBalance: undefined,
   });
   useEffect(() => {
     depsRef.current = {
@@ -84,8 +89,19 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
       deposit,
       payBriefing,
       deployYield,
+      ownerUsdcBalance: ownerBalance.data,
+      vaultUsdcBalance: vaultBalance.data,
     };
-  }, [program, publicKey, vaults.data, deposit, payBriefing, deployYield]);
+  }, [
+    program,
+    publicKey,
+    vaults.data,
+    deposit,
+    payBriefing,
+    deployYield,
+    ownerBalance.data,
+    vaultBalance.data,
+  ]);
 
   const tools = useMemo<ClientTools>(() => {
     return {
@@ -125,6 +141,36 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
         return JSON.stringify({
           intent: String(intent ?? ""),
           top,
+          source: "LI.FI Earn",
+        });
+      },
+
+      find_idle_assets: async () => {
+        // Free read tool: surfaces idle USDC the user could put to work and
+        // suggests where, sourced from LI.FI Earn. No payment required.
+        const data = depsRef.current.vaultsData;
+        const ownerUsdc = depsRef.current.ownerUsdcBalance ?? 0;
+        const vaultUsdc = depsRef.current.vaultUsdcBalance ?? 0;
+
+        const top =
+          data?.ranked.slice(0, 3).map((v) => ({
+            protocol: v.protocol.name,
+            network: v.network,
+            apy: v.apyTotal.toFixed(2),
+            risk: v.riskTier,
+          })) ?? [];
+
+        return JSON.stringify({
+          ownerWalletUsdc: ownerUsdc.toFixed(2),
+          sageVaultUsdc: vaultUsdc.toFixed(2),
+          guidance:
+            ownerUsdc > 0.01
+              ? `${ownerUsdc.toFixed(
+                  2,
+                )} USDC sits idle in the user's wallet. Suggest depositing it into the Sage vault and running an autonomous task to deploy it.`
+              : "User's wallet has no idle USDC outside the Sage vault.",
+          topYield: top,
+          source: "LI.FI Earn",
         });
       },
 
@@ -280,6 +326,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           </a>
           {" "}with tools <code className="font-mono">get_vault_status</code>,{" "}
           <code className="font-mono">find_yield</code>,{" "}
+          <code className="font-mono">find_idle_assets</code>,{" "}
           <code className="font-mono">propose_deposit</code>,{" "}
           <code className="font-mono">propose_yield_deposit</code>,{" "}
           <code className="font-mono">pay_briefing</code>, and{" "}
@@ -388,7 +435,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
 
   // Tool calls observed (V2 timeline) — derive from transcript message lines.
   const toolEvents = transcript.filter((line) =>
-    /(get_vault_status|find_yield|propose_deposit|propose_yield_deposit|pay_briefing|start_autonomous_task)/.test(line),
+    /(get_vault_status|find_yield|find_idle_assets|propose_deposit|propose_yield_deposit|pay_briefing|start_autonomous_task)/.test(line),
   );
 
   if (!isActive) {
@@ -587,6 +634,7 @@ export function VoiceAgent({ ctx }: { ctx?: ScreenContext }) {
           {[
             "get_vault_status",
             "find_yield",
+            "find_idle_assets",
             "propose_deposit",
             "propose_yield_deposit",
             "pay_briefing",
