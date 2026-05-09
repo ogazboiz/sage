@@ -9,17 +9,17 @@ const SHAPE_OPTIONS: { value: Shape; label: string; sample: string }[] = [
   {
     value: "briefing",
     label: "Briefing",
-    sample: "Brief me on Solana DeFi every minute for 5 minutes",
+    sample: "Brief me on cross-chain USDC yield every minute for 5 minutes",
   },
   {
     value: "monitor",
     label: "Monitor",
-    sample: "Watch Kamino USDC every 30 seconds. Alert on tier change.",
+    sample: "Watch top USDC vaults every 30 seconds. Alert on tier change.",
   },
   {
     value: "content",
     label: "Content",
-    sample: "Draft me a short Solana DeFi report",
+    sample: "Draft me a short cross-chain stablecoin yield report",
   },
   { value: "auto", label: "Auto", sample: "Whatever fits the goal" },
 ];

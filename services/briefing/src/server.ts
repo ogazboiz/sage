@@ -638,8 +638,13 @@ app.post("/wrap-up", async (req, res) => {
     )
     .join("\n");
 
+  const goalMentionsSolana = /solana/i.test(goal);
+  const dataNote = goalMentionsSolana
+    ? `\nNote: the user's goal mentions Solana, but LI.FI Earn's USDC index is currently EVM-heavy; the agent surfaced the strongest cross-chain alternatives instead. Mention this honestly in the wrap-up if relevant.`
+    : "";
+
   const prose = await geminiSummarise(
-    `An autonomous AI agent on Solana ran a recurring task over a USDC budget. The user's goal was: "${goal}".\nThe agent paid for ${iterations.length} services totalling ${totalSpent.toFixed(2)} USDC. Most recent results:\n${breakdown}\n\nWrite a tight 3-sentence wrap-up summarising what the agent learned and any signal worth flagging. Active voice. No em dashes. Concrete numbers from the results, no platitudes.`,
+    `An autonomous AI agent on Solana ran a recurring task over a USDC budget. The user's goal was: "${goal}".\nThe agent paid for ${iterations.length} services totalling ${totalSpent.toFixed(2)} USDC. Most recent results:\n${breakdown}${dataNote}\n\nWrite a tight 3-sentence wrap-up summarising what the agent learned and any signal worth flagging. Active voice. No em dashes. Concrete numbers from the results, no platitudes.`,
   );
 
   return res.json({
