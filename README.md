@@ -10,7 +10,7 @@ Sage gives an AI agent a per-task spending cap on Solana. The user signs once. T
 
 ## The pitch in one paragraph
 
-AI agents are starting to spend money on the internet. Today they get full wallet access (unsafe), use a hosted custodial service (trust required), or sign every micropayment by hand (defeats the agent). There is no on-chain primitive that says *"this agent can spend up to $X for this task and nothing else."* Sage is that primitive on Solana, with four reference paid services to prove the loop carries: live LI.FI Earn briefings, yield snapshots, alert checks, and Gemini synthesis. Voice opens the task; the program enforces every release; the agent walks itself to zero.
+AI agents are starting to spend money on the internet. Today they get full wallet access (unsafe), use a hosted custodial service (trust required), or sign every micropayment by hand (defeats the agent). There is no on-chain primitive that says *"this agent can spend up to $X for this task and nothing else."* Sage is that primitive on Solana, with four reference paid services to prove the loop carries: a cross-chain USDC briefing sourced from LI.FI Earn + Gemini, a yield snapshot, an alert check, and a Gemini synthesis tool. **The agent pays in real Solana SPL USDC to read LI.FI's cross-chain yield index.** Voice opens the task; the program enforces every release; the agent walks itself to zero.
 
 ## How it works
 
@@ -62,8 +62,8 @@ The owner / agent_keypair split is what makes autonomy work. The user signs `app
 
 | Endpoint | Price | Returns |
 |---|---|---|
-| `POST /brief` | 0.20 USDC | Long-form Solana DeFi briefing, LI.FI Earn data + Gemini synthesis |
-| `POST /yield-snapshot` | 0.05 USDC | Top 3 USDC vaults right now, one-line summary |
+| `POST /brief` | 0.20 USDC | Long-form cross-chain USDC briefing, LI.FI Earn data + Gemini synthesis |
+| `POST /yield-snapshot` | 0.05 USDC | Top 3 USDC vaults across chains right now, one-line summary |
 | `POST /alert-check` | 0.05 USDC | Did the named vault tier change since last check? |
 | `POST /synthesize` | 0.10 USDC | Take agent context, return a paragraph |
 
@@ -160,7 +160,7 @@ The briefing service auto-loads `app/.env.local` via Node's `--env-file-if-exist
 
 **1. Manual autonomous loop.** Vault tab → init + deposit ≥ $1 → Activity tab → Briefing shape, $0.50 cap, 30s interval, 2min duration → Start. Sign twice (SOL drip, then approve_task). Watch the loop fire `/brief` and `/yield-snapshot` calls, vault counter ticking down, every iteration linkable on solscan-devnet.
 
-**2. Voice-triggered loop.** Talk → *"Run a Solana DeFi briefing every 30 seconds for 2 minutes, max one dollar."* Voice agent calls `start_autonomous_task`, app navigates to Activity, form pre-fills. Click Start.
+**2. Voice-triggered loop.** Talk → *"Run a cross-chain USDC briefing every 30 seconds for 2 minutes, max one dollar."* Voice agent calls `start_autonomous_task`, app navigates to Activity, form pre-fills. Click Start.
 
 **3. Idle-asset query.** Talk → *"What's idle?"* Voice agent calls `find_idle_assets`, reports USDC sitting outside the vault and suggests where it could earn.
 
@@ -168,7 +168,7 @@ The briefing service auto-loads `app/.env.local` via Node's `--env-file-if-exist
 
 - **Solana Best App.** Novel `agent_keypair` pattern actually load-bearing. Atomic instruction sequences. Demo moment: program rejects the agent at $0.00.
 - **Solana x402 bonus.** Every loop iteration is a real Solana SPL settlement against a paid endpoint. Four endpoints, all spec-compliant.
-- **LI.FI prize.** LI.FI Earn is the data layer the agent pays USDC to read, on every `/brief`, `/yield-snapshot`, `/alert-check` call. Every paid call surfaces an `LI.FI Earn` badge in the Activity log.
+- **LI.FI prize.** LI.FI Earn is the cross-chain data layer the agent pays USDC to read. Every `/brief`, `/yield-snapshot`, `/alert-check` call walks LI.FI Earn pagination across chains, ranks by safety, and returns top USDC yield. The agent's payment settles on Solana; the data the agent buys is cross-chain by design — that is the integration story. Every paid call surfaces an `LI.FI Earn` badge in the Activity log.
 - **ElevenLabs prize.** Voice is the only way to start a scheduled task. Conversational Agent with seven bound tools, including `find_idle_assets` (LI.FI free read) and `start_autonomous_task` (full session opener).
 
 ## Honest limitations
