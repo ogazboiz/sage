@@ -109,6 +109,10 @@ export function AutonomousTaskPanel() {
   const [durationMinutes, setDurationMinutes] = useState("5");
   const [, setTick] = useState(0); // forces re-render so the countdown ticks
   const [seededFromVoice, setSeededFromVoice] = useState(false);
+  // When a task ends, the wrap-up takes over the panel. The user can flip
+  // back to the form by clicking "Run another task". Reset whenever a new
+  // task starts.
+  const [showFormAfterWrap, setShowFormAfterWrap] = useState(false);
 
   // The voice tool can hand off here via sessionStorage. Pull any pending
   // autonomous params on mount and pre-fill the form.
@@ -171,6 +175,9 @@ export function AutonomousTaskPanel() {
         durationMinutes: durationMin,
         decide,
       });
+      // Reset the "show form after wrap" flag so the next wrap-up takes
+      // over the panel again.
+      setShowFormAfterWrap(false);
     } catch (err) {
       console.error("[autonomous-panel] start failed:", err);
     }
@@ -204,8 +211,12 @@ export function AutonomousTaskPanel() {
         </div>
       )}
 
-      {/* Setup form */}
-      {!isRunning && task.status !== "stopping" && (
+      {/* Setup form. Gated so it doesn't compete with the wrap-up card
+          when a task has just ended; user clicks "Run another task" to flip
+          here. */}
+      {!isRunning &&
+        task.status !== "stopping" &&
+        (!task.wrapUp || showFormAfterWrap) && (
         <div className="space-y-3">
           <div>
             <p className="label-mono mb-1.5">Shape</p>
@@ -339,8 +350,9 @@ export function AutonomousTaskPanel() {
         </div>
       )}
 
-      {/* Wrap-up card after the loop ends */}
-      {task.status === "stopped" && task.wrapUp && (
+      {/* Wrap-up card after the loop ends. Hides when user clicks "Run
+          another task" so the form has the full panel. */}
+      {task.status === "stopped" && task.wrapUp && !showFormAfterWrap && (
         <div className="card bg-white p-5 space-y-3 border-sage-accent!">
           <div className="flex items-baseline justify-between gap-2 flex-wrap">
             <p className="text-sm font-semibold text-sage-text">
@@ -389,6 +401,14 @@ export function AutonomousTaskPanel() {
               complete_task tx {shortSig(task.wrapUp.completeSig)} ↗
             </a>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowFormAfterWrap(true)}
+            className="btn btn-primary w-full mt-2"
+          >
+            Run another task ›
+          </button>
         </div>
       )}
 
