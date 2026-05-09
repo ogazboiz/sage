@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import {
   Connection,
   PublicKey,
@@ -18,13 +18,12 @@ const MINT = new PublicKey(
   process.env.MINT ?? "EzAYN6m9yDhwKHRdt9iY9LCgpPDdCXrUtmfoj7PWNYon",
 );
 
-const PRICE_USDC = 0.2;
 const DECIMALS = 6;
-const PRICE_BASE_UNITS = BigInt(Math.round(PRICE_USDC * 10 ** DECIMALS));
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
 interface NonceRecord {
   amount: bigint;
+  endpoint: string;
   expiresAt: number;
   consumed: boolean;
 }
@@ -42,18 +41,22 @@ function makeNonce(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
-function paymentChallenge(nonce: string) {
+function priceBaseUnits(priceUsdc: number): bigint {
+  return BigInt(Math.round(priceUsdc * 10 ** DECIMALS));
+}
+
+function paymentChallenge(nonce: string, priceUsdc: number) {
   return {
     scheme: "x402-solana",
     network: "solana-devnet",
-    amount: PRICE_USDC.toString(),
+    amount: priceUsdc.toString(),
     asset: "USDC",
     mint: MINT.toBase58(),
     recipient: TREASURY.toBase58(),
     nonce,
     expiresIn: NONCE_TTL_MS / 1000,
     instructions:
-      "Send the listed amount in this SPL mint to the recipient ATA, then retry with X-Payment: <tx-signature>. Include the nonce in a memo or as the first 32 bytes of the transaction message reference.",
+      "Send the listed amount in this SPL mint to the recipient ATA, then retry with X-Payment: <tx-signature>. Include the nonce in a memo on the same transaction.",
   };
 }
 
@@ -63,6 +66,7 @@ async function verifyPayment(
   connection: Connection,
   signature: string,
   nonce: string,
+  expectedAmount: bigint,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   let tx: ParsedTransactionWithMeta | null;
   try {
@@ -76,7 +80,8 @@ async function verifyPayment(
   if (!tx) return { ok: false, reason: "Transaction not found" };
   if (tx.meta?.err) return { ok: false, reason: "Transaction reverted" };
 
-  const innerIxs = tx.meta?.innerInstructions?.flatMap((g) => g.instructions) ?? [];
+  const innerIxs =
+    tx.meta?.innerInstructions?.flatMap((g) => g.instructions) ?? [];
   const allIxs = [...tx.transaction.message.instructions, ...innerIxs];
 
   for (const ix of allIxs) {
@@ -93,10 +98,10 @@ async function verifyPayment(
         (info.amount as string | undefined);
       if (!amountStr) continue;
       const amount = BigInt(amountStr);
-      if (amount < PRICE_BASE_UNITS) {
+      if (amount < expectedAmount) {
         return {
           ok: false,
-          reason: `Insufficient amount: ${amount} < ${PRICE_BASE_UNITS}`,
+          reason: `Insufficient amount: ${amount} < ${expectedAmount}`,
         };
       }
 
@@ -124,6 +129,7 @@ async function verifyPayment(
 const LIFI_SOLANA_CHAIN_ID = 1151111081099710;
 const LIFI_BASE = "https://li.quest";
 const LIFI_API_KEY = process.env.LIFI_API_KEY ?? process.env.VITE_LIFI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 interface EarnVaultLite {
   slug: string;
@@ -138,8 +144,24 @@ interface EarnVaultLite {
   };
 }
 
+interface RankedVaultLite {
+  slug: string;
+  protocol: string;
+  network: string;
+  apy: number;
+  base: number;
+  reward: number;
+  tvl: number;
+  rewardHeavy: boolean;
+}
+
+let cachedVaults: { ts: number; data: EarnVaultLite[] } | null = null;
+
 async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
   if (!LIFI_API_KEY) return [];
+  if (cachedVaults && Date.now() - cachedVaults.ts < 60_000) {
+    return cachedVaults.data;
+  }
   const url = new URL(`${LIFI_BASE}/v1/vaults`);
   url.searchParams.set("chainId", String(LIFI_SOLANA_CHAIN_ID));
   url.searchParams.set("symbol", "USDC");
@@ -153,7 +175,28 @@ async function fetchTopSolanaUsdcVaults(): Promise<EarnVaultLite[]> {
     throw new Error(`LI.FI Earn ${res.status}: ${await res.text()}`);
   }
   const body = (await res.json()) as { data: EarnVaultLite[] };
-  return body.data ?? [];
+  cachedVaults = { ts: Date.now(), data: body.data ?? [] };
+  return cachedVaults.data;
+}
+
+function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
+  return vaults
+    .map((v) => {
+      const apy = v.analytics.apy.total ?? 0;
+      const reward = v.analytics.apy.reward ?? 0;
+      return {
+        slug: v.slug,
+        protocol: v.protocol.name,
+        network: v.network,
+        apy,
+        base: v.analytics.apy.base ?? 0,
+        reward,
+        tvl: parseFloat(v.analytics.tvl.usd) || 0,
+        rewardHeavy: apy > 0 && reward / apy > 0.6 && apy > 8,
+      };
+    })
+    .filter((v) => v.apy > 0)
+    .sort((a, b) => b.apy - a.apy);
 }
 
 function compactUsd(n: number): string {
@@ -164,6 +207,36 @@ function compactUsd(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+// Gemini wrapper for prose generation. Falls back to templated text if the
+// key is missing or the API errors. Keeps the demo deterministic on flakes.
+async function geminiSummarise(prompt: string): Promise<string | null> {
+  if (!GEMINI_API_KEY) return null;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 240 },
+        }),
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+    return typeof text === "string" ? text.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Endpoint generators ─────────────────────────────────────────────────
+
 async function generateBriefing(): Promise<string> {
   const ts = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
   let vaults: EarnVaultLite[] = [];
@@ -173,73 +246,222 @@ async function generateBriefing(): Promise<string> {
     console.warn("[briefing] LI.FI fetch failed:", (err as Error).message);
   }
 
-  if (vaults.length === 0) {
-    return [
-      `Solana DeFi briefing, ${ts}.`,
-      "Live yield feed unavailable for this run, so falling back to last known posture.",
-      "Stablecoin yields have been clustering in the 4 to 5 percent range across Kamino and Marginfi.",
-      "MEV-aware liquidity favours Drift and Phoenix.",
-      "Risk note: pools with reward APY above 60 percent of the headline number remain flagged.",
-    ].join(" ");
+  const ranked = rankVaults(vaults);
+  if (ranked.length === 0) {
+    return `Solana DeFi briefing, ${ts}. Live yield feed unavailable; falling back to last known posture. Stablecoin yields have been clustering 4 to 5 percent across Kamino and Marginfi. Risk note: pools with reward APY above 60 percent of the headline number remain flagged.`;
   }
 
-  const ranked = vaults
-    .map((v) => ({
-      slug: v.slug,
-      protocol: v.protocol.name,
-      apy: v.analytics.apy.total ?? 0,
-      base: v.analytics.apy.base ?? 0,
-      reward: v.analytics.apy.reward ?? 0,
-      tvl: parseFloat(v.analytics.tvl.usd) || 0,
-    }))
-    .filter((v) => v.apy > 0)
-    .sort((a, b) => b.apy - a.apy);
-
   const top = ranked.slice(0, 3);
-  const totalTvl = ranked
-    .slice(0, 10)
-    .reduce((sum, v) => sum + v.tvl, 0);
+  const totalTvl = ranked.slice(0, 10).reduce((sum, v) => sum + v.tvl, 0);
+  const rewardHeavy = ranked.find((v) => v.rewardHeavy);
 
-  const rewardHeavy = ranked.find(
-    (v) => v.apy > 0 && v.reward / v.apy > 0.6 && v.apy > 8,
+  const dataSummary = top
+    .map(
+      (v) =>
+        `${v.protocol} (${v.network}): ${v.apy.toFixed(2)}% APY, ${compactUsd(
+          v.tvl,
+        )} TVL, ${v.reward.toFixed(2)}% from rewards`,
+    )
+    .join(" / ");
+
+  const geminiProse = await geminiSummarise(
+    `Write a tight 4-sentence Solana DeFi briefing dated ${ts}. Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL: ${compactUsd(
+      totalTvl,
+    )}. ${
+      rewardHeavy
+        ? `Flag ${rewardHeavy.protocol} (${rewardHeavy.apy.toFixed(
+            2,
+          )}% APY, ${((rewardHeavy.reward / rewardHeavy.apy) * 100).toFixed(
+            0,
+          )}% from rewards) as caution.`
+        : "No reward-heavy outliers in the top set."
+    } Active voice. No em dashes. Concrete numbers, no platitudes.`,
   );
+  if (geminiProse) return geminiProse;
 
+  // Fallback: templated prose if Gemini is unavailable.
   const topLine = top
     .map((v) => `${v.protocol} at ${v.apy.toFixed(2)} percent`)
     .join(", ");
-
-  const sentences = [
-    `Solana DeFi briefing, ${ts}.`,
-    `Top USDC vaults right now: ${topLine}.`,
-    `Combined TVL across the top ten USDC vaults sits at ${compactUsd(
-      totalTvl,
-    )}.`,
-  ];
-
-  if (rewardHeavy) {
-    sentences.push(
-      `Outlier flagged: ${rewardHeavy.protocol} at ${rewardHeavy.apy.toFixed(
-        2,
-      )} percent, but ${(
-        (rewardHeavy.reward / rewardHeavy.apy) *
-        100
-      ).toFixed(0)} percent of that comes from reward emissions, treat as caution.`,
-    );
-  } else {
-    sentences.push(
-      "No reward-heavy outliers in the top set, headline numbers look organic.",
-    );
-  }
-
-  sentences.push(
-    "Risk note: pools with reward APY above 60 percent of the headline number stay flagged in the data feed.",
-  );
-
-  return sentences.join(" ");
+  return `Solana DeFi briefing, ${ts}. Top USDC vaults right now: ${topLine}. Combined TVL across the top ten USDC vaults sits at ${compactUsd(
+    totalTvl,
+  )}. ${
+    rewardHeavy
+      ? `Outlier flagged: ${
+          rewardHeavy.protocol
+        } at ${rewardHeavy.apy.toFixed(2)} percent, ${(
+          (rewardHeavy.reward / rewardHeavy.apy) *
+          100
+        ).toFixed(0)} percent from rewards. Treat as caution.`
+      : "No reward-heavy outliers in the top set."
+  } Risk note: pools with reward APY above 60 percent of the headline number stay flagged.`;
 }
 
+async function generateYieldSnapshot(): Promise<{
+  ts: string;
+  top: { protocol: string; network: string; apy: number; tvl: number }[];
+  oneLine: string;
+}> {
+  const ts = new Date().toISOString();
+  const vaults = await fetchTopSolanaUsdcVaults().catch(() => []);
+  const ranked = rankVaults(vaults).slice(0, 3);
+  const oneLine =
+    ranked.length === 0
+      ? "Yield feed unavailable."
+      : ranked
+          .map((v) => `${v.protocol} ${v.apy.toFixed(2)}%`)
+          .join(" · ");
+  return {
+    ts,
+    top: ranked.map((v) => ({
+      protocol: v.protocol,
+      network: v.network,
+      apy: parseFloat(v.apy.toFixed(2)),
+      tvl: v.tvl,
+    })),
+    oneLine,
+  };
+}
+
+// In-memory tier history per slug. The /alert-check endpoint compares the
+// current tier (top-3 / outside-top-3 / unranked) to the last seen tier and
+// reports a change if any.
+const lastSeenTier = new Map<string, "top3" | "ranked" | "unranked">();
+
+async function generateAlertCheck(slug: string): Promise<{
+  ts: string;
+  slug: string;
+  changed: boolean;
+  current: "top3" | "ranked" | "unranked";
+  previous: "top3" | "ranked" | "unranked" | null;
+  apy: number | null;
+  reason: string;
+}> {
+  const ts = new Date().toISOString();
+  const vaults = await fetchTopSolanaUsdcVaults().catch(() => []);
+  const ranked = rankVaults(vaults);
+  const idx = ranked.findIndex((v) => v.slug === slug);
+  let current: "top3" | "ranked" | "unranked";
+  let apy: number | null = null;
+  if (idx === -1) {
+    current = "unranked";
+  } else {
+    apy = parseFloat(ranked[idx]!.apy.toFixed(2));
+    current = idx < 3 ? "top3" : "ranked";
+  }
+  const previous = lastSeenTier.get(slug) ?? null;
+  const changed = previous !== null && previous !== current;
+  lastSeenTier.set(slug, current);
+  const reason = changed
+    ? `Tier moved from ${previous} to ${current}.`
+    : previous === null
+      ? "First check; no prior baseline."
+      : "No tier change.";
+  return { ts, slug, changed, current, previous, apy, reason };
+}
+
+async function generateSynthesis(input: string): Promise<string> {
+  const ts = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  if (!input || typeof input !== "string") {
+    return `Synthesis at ${ts}: input was empty.`;
+  }
+  const prose = await geminiSummarise(
+    `You are summarising agent-collected data for a user.\nData: ${input.slice(
+      0,
+      4000,
+    )}\nWrite a single tight paragraph (3 sentences max) explaining what changed and what it implies. Active voice. No em dashes. No filler.`,
+  );
+  return (
+    prose ??
+    `Synthesis at ${ts}: ${input.slice(0, 240)}${
+      input.length > 240 ? "…" : ""
+    }`
+  );
+}
+
+// ─── x402 middleware ─────────────────────────────────────────────────────
+
+type PaidHandler<TBody = unknown> = (req: Request, res: Response) => Promise<{
+  body: TBody;
+  status?: number;
+}>;
+
+function paidEndpoint<TBody>(
+  endpointName: string,
+  priceUsdc: number,
+  handler: PaidHandler<TBody>,
+) {
+  const expectedBaseUnits = priceBaseUnits(priceUsdc);
+
+  return async (req: Request, res: Response) => {
+    pruneNonces();
+
+    const signature = req.header("X-Payment");
+    const nonceHeader = req.header("X-Payment-Nonce");
+
+    if (!signature || !nonceHeader) {
+      const nonce = makeNonce();
+      nonces.set(nonce, {
+        amount: expectedBaseUnits,
+        endpoint: endpointName,
+        expiresAt: Date.now() + NONCE_TTL_MS,
+        consumed: false,
+      });
+      return res
+        .status(402)
+        .setHeader("WWW-Authenticate", "x402-solana")
+        .json({ payment: paymentChallenge(nonce, priceUsdc) });
+    }
+
+    const record = nonces.get(nonceHeader);
+    if (!record) {
+      return res.status(400).json({ error: "Unknown or expired nonce" });
+    }
+    if (record.endpoint !== endpointName) {
+      return res
+        .status(400)
+        .json({ error: `Nonce was issued for ${record.endpoint}` });
+    }
+    if (record.consumed) {
+      return res.status(409).json({ error: "Nonce already consumed (replay)" });
+    }
+    if (record.expiresAt < Date.now()) {
+      return res.status(410).json({ error: "Payment challenge expired" });
+    }
+
+    const verification = await verifyPayment(
+      connection,
+      signature,
+      nonceHeader,
+      record.amount,
+    );
+    if (!verification.ok) {
+      return res.status(402).json({ error: verification.reason });
+    }
+    record.consumed = true;
+
+    try {
+      const result = await handler(req, res);
+      const body = {
+        ...(typeof result.body === "object" && result.body
+          ? (result.body as Record<string, unknown>)
+          : { result: result.body }),
+        paid: { signature, amount: priceUsdc, asset: "USDC", endpoint: endpointName },
+      };
+      return res.status(result.status ?? 200).json(body);
+    } catch (err) {
+      console.error(`[${endpointName}] handler error:`, err);
+      return res
+        .status(500)
+        .json({ error: (err as Error).message ?? "internal error" });
+    }
+  };
+}
+
+// ─── App ────────────────────────────────────────────────────────────────
+
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "256kb" }));
 app.use((_, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(
@@ -250,62 +472,79 @@ app.use((_, res, next) => {
   next();
 });
 
-app.options("/brief", (_, res) => {
-  res.status(204).end();
-});
+const PAID_ROUTES = ["/brief", "/yield-snapshot", "/alert-check", "/synthesize"];
+for (const route of PAID_ROUTES) {
+  app.options(route, (_, res) => res.status(204).end());
+}
 
 const connection = new Connection(RPC, "confirmed");
 
-app.post("/brief", async (req, res) => {
-  pruneNonces();
+app.post(
+  "/brief",
+  paidEndpoint("brief", 0.2, async () => {
+    const briefing = await generateBriefing();
+    return { body: { briefing } };
+  }),
+);
 
-  const signature = req.header("X-Payment");
-  const nonceHeader = req.header("X-Payment-Nonce");
+app.post(
+  "/yield-snapshot",
+  paidEndpoint("yield-snapshot", 0.05, async () => {
+    const snapshot = await generateYieldSnapshot();
+    return { body: snapshot };
+  }),
+);
 
-  if (!signature || !nonceHeader) {
-    const nonce = makeNonce();
-    nonces.set(nonce, {
-      amount: PRICE_BASE_UNITS,
-      expiresAt: Date.now() + NONCE_TTL_MS,
-      consumed: false,
-    });
-    return res
-      .status(402)
-      .setHeader("WWW-Authenticate", "x402-solana")
-      .json({ payment: paymentChallenge(nonce) });
-  }
+app.post(
+  "/alert-check",
+  paidEndpoint<Record<string, unknown>>("alert-check", 0.05, async (req) => {
+    const slug = String(req.body?.slug ?? "").trim();
+    if (!slug) {
+      return {
+        body: { error: "Missing slug in request body" },
+        status: 400,
+      };
+    }
+    const result = await generateAlertCheck(slug);
+    return { body: result };
+  }),
+);
 
-  const record = nonces.get(nonceHeader);
-  if (!record) {
-    return res.status(400).json({ error: "Unknown or expired nonce" });
-  }
-  if (record.consumed) {
-    return res.status(409).json({ error: "Nonce already consumed (replay)" });
-  }
-  if (record.expiresAt < Date.now()) {
-    return res.status(410).json({ error: "Payment challenge expired" });
-  }
+app.post(
+  "/synthesize",
+  paidEndpoint("synthesize", 0.1, async (req) => {
+    const input = typeof req.body?.input === "string" ? req.body.input : "";
+    const synthesis = await generateSynthesis(input);
+    return { body: { synthesis } };
+  }),
+);
 
-  const verification = await verifyPayment(connection, signature, nonceHeader);
-  if (!verification.ok) {
-    return res.status(402).json({ error: verification.reason });
-  }
-  record.consumed = true;
-
-  const briefing = await generateBriefing();
-  return res.status(200).json({
-    briefing,
-    paid: { signature, amount: PRICE_USDC, asset: "USDC" },
+app.get("/services", (_, res) => {
+  res.json({
+    services: [
+      { endpoint: "/brief", price: 0.2, description: "Long-form Solana DeFi briefing" },
+      { endpoint: "/yield-snapshot", price: 0.05, description: "Top 3 USDC vaults right now" },
+      { endpoint: "/alert-check", price: 0.05, description: "Did this vault's tier change?" },
+      { endpoint: "/synthesize", price: 0.1, description: "Synthesize accumulated context into prose" },
+    ],
+    treasury: TREASURY.toBase58(),
+    mint: MINT.toBase58(),
   });
 });
 
 app.get("/health", (_, res) => {
-  res.json({ ok: true, treasury: TREASURY.toBase58(), price: PRICE_USDC });
+  res.json({
+    ok: true,
+    treasury: TREASURY.toBase58(),
+    services: PAID_ROUTES,
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Sage briefing service on :${PORT}`);
+  console.log(`Sage paid-services on :${PORT}`);
   console.log(`  treasury: ${TREASURY.toBase58()}`);
   console.log(`  treasury ATA: ${treasuryAta.toBase58()}`);
   console.log(`  mint: ${MINT.toBase58()}`);
+  console.log(`  services: ${PAID_ROUTES.join(", ")}`);
+  console.log(`  gemini: ${GEMINI_API_KEY ? "enabled" : "disabled (fallback prose)"}`);
 });

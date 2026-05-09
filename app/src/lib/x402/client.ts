@@ -16,34 +16,43 @@ export interface X402ChallengeResponse {
 
 export async function fetchChallenge(
   serviceUrl: string,
+  body?: unknown,
 ): Promise<X402Challenge> {
-  const res = await fetch(serviceUrl, { method: "POST" });
+  const res = await fetch(serviceUrl, {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
   if (res.status !== 402) {
     throw new Error(
       `Expected 402 from ${serviceUrl}, got ${res.status}: ${await res.text()}`,
     );
   }
-  const body = (await res.json()) as X402ChallengeResponse;
-  return body.payment;
+  const parsed = (await res.json()) as X402ChallengeResponse;
+  return parsed.payment;
 }
 
 export interface X402Result<T = unknown> {
   briefing?: string;
-  paid?: { signature: string; amount: number; asset: string };
+  paid?: { signature: string; amount: number; asset: string; endpoint?: string };
   data?: T;
+  [key: string]: unknown;
 }
 
 export async function settleAndFetch<T = unknown>(
   serviceUrl: string,
   signature: string,
   nonce: string,
+  body?: unknown,
 ): Promise<X402Result<T>> {
   const res = await fetch(serviceUrl, {
     method: "POST",
     headers: {
       "X-Payment": signature,
       "X-Payment-Nonce": nonce,
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     const text = await res.text();
