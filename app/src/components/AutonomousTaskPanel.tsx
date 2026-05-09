@@ -5,21 +5,24 @@ import { useAutonomousTask } from "@/hooks/useAutonomousTask";
 import { useVaultUsdcBalance } from "@/hooks/useTokenBalances";
 import { buildDecidePolicy, type Shape } from "@/lib/autonomous-decide";
 
+// Goal samples describe INTENT only. Schedule (interval, duration, budget)
+// lives in the form fields below — the agent runs on those values, not on
+// time phrases inside the goal.
 const SHAPE_OPTIONS: { value: Shape; label: string; sample: string }[] = [
   {
     value: "briefing",
     label: "Briefing",
-    sample: "Brief me on cross-chain USDC yield every minute for 5 minutes",
+    sample: "Brief me on cross-chain USDC yield",
   },
   {
     value: "monitor",
     label: "Monitor",
-    sample: "Watch top USDC vaults every 30 seconds. Alert on tier change.",
+    sample: "Watch top USDC vaults and alert on tier change",
   },
   {
     value: "content",
     label: "Content",
-    sample: "Draft me a short cross-chain stablecoin yield report",
+    sample: "Draft a short cross-chain stablecoin yield report",
   },
   { value: "auto", label: "Auto", sample: "Whatever fits the goal" },
 ];
@@ -38,6 +41,53 @@ function formatRemaining(endsAt: number | null): string {
   const m = Math.floor(ms / 60_000);
   const s = Math.floor((ms % 60_000) / 1_000);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// Tells the user how many iterations actually fit, given budget + schedule.
+// The agent runs on the form values, not on time phrases inside the goal,
+// so a goal like "every minute for 5 minutes" with a $0.10 budget will
+// only fire 1-2 iterations regardless of what the goal text says.
+function BudgetHint({
+  budget,
+  intervalSeconds,
+  durationMinutes,
+  shape,
+}: {
+  budget: number;
+  intervalSeconds: number;
+  durationMinutes: number;
+  shape: Shape;
+}) {
+  if (
+    !Number.isFinite(budget) ||
+    !Number.isFinite(intervalSeconds) ||
+    !Number.isFinite(durationMinutes) ||
+    budget <= 0 ||
+    intervalSeconds <= 0 ||
+    durationMinutes <= 0
+  ) {
+    return null;
+  }
+  // Average cost per iteration depends on the shape's typical endpoint mix.
+  const avgCost =
+    shape === "briefing"
+      ? 0.08 // mostly /yield-snapshot, occasional /brief
+      : shape === "monitor"
+        ? 0.05 // mostly /alert-check
+        : shape === "content"
+          ? 0.1 // mix of yield-snapshot, brief, synthesize
+          : 0.07;
+  const maxByBudget = Math.floor(budget / avgCost);
+  const maxByTime = Math.floor((durationMinutes * 60) / intervalSeconds);
+  const fits = Math.min(maxByBudget, maxByTime);
+  const limiter = maxByBudget < maxByTime ? "budget" : "duration";
+
+  return (
+    <p className="text-[11px] text-sage-text-dim font-mono">
+      ≈ {fits} iterations fit ({limiter}-bound). The agent runs on these form
+      values; time phrases inside the goal are ignored.
+    </p>
+  );
 }
 
 export function AutonomousTaskPanel() {
@@ -215,6 +265,16 @@ export function AutonomousTaskPanel() {
               />
             </div>
           </div>
+
+          {/* Budget hint: how many iterations actually fit. Cheapest paid
+              endpoint is $0.05 (yield-snapshot); briefing is $0.20. The
+              max iterations the timer allows is duration / interval. */}
+          <BudgetHint
+            budget={parseFloat(budget)}
+            intervalSeconds={parseFloat(intervalSeconds)}
+            durationMinutes={parseFloat(durationMinutes)}
+            shape={shape}
+          />
 
           <button
             type="button"
