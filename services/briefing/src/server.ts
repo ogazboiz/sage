@@ -323,7 +323,7 @@ async function geminiSummarise(prompt: string): Promise<string | null> {
 
 // ─── Endpoint generators ─────────────────────────────────────────────────
 
-async function generateBriefing(): Promise<string> {
+async function generateBriefing(goal?: string): Promise<string> {
   const ts = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
   let vaults: EarnVaultLite[] = [];
   try {
@@ -333,6 +333,9 @@ async function generateBriefing(): Promise<string> {
   }
 
   const ranked = rankVaults(vaults);
+  const goalText = (goal ?? "").trim();
+  const goalMentionsSolana = /solana/i.test(goalText);
+
   if (ranked.length === 0) {
     return `Cross-chain USDC briefing, ${ts}. LI.FI Earn feed returned no qualifying vaults on this fetch. Stablecoin yields generally cluster 4 to 6 percent across major lending markets. Risk note: pools with reward APY above 60 percent of the headline number stay flagged.`;
   }
@@ -352,8 +355,19 @@ async function generateBriefing(): Promise<string> {
     )
     .join(" / ");
 
+  // When the user's goal mentions Solana but our LI.FI Earn pool has none,
+  // tell Gemini to be honest about it AND mention concrete Solana
+  // alternatives the user can act on directly (Marginfi, Kamino, Save, etc).
+  const solanaNote = goalMentionsSolana
+    ? ` The user's goal explicitly mentions Solana, but LI.FI Earn's USDC index does not currently include Solana vaults; tell the user this directly and recommend they look at Marginfi, Kamino, Save, or Drift on Solana for native USDC yield. Lead with this acknowledgement before listing the cross-chain numbers.`
+    : "";
+
+  const goalLine = goalText
+    ? ` The user's stated goal was: "${goalText}". Reflect that intent in the framing if relevant.`
+    : "";
+
   const geminiProse = await geminiSummarise(
-    `Write a tight 4-sentence cross-chain USDC yield briefing dated ${ts} sourced from LI.FI Earn. Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL across chains: ${compactUsd(
+    `Write a tight 4-sentence cross-chain USDC yield briefing dated ${ts} sourced from LI.FI Earn.${goalLine}${solanaNote} Use these top USDC vaults right now: ${dataSummary}. Combined top-10 USDC TVL across chains: ${compactUsd(
       totalTvl,
     )}. ${
       rewardHeavy
@@ -385,7 +399,7 @@ async function generateBriefing(): Promise<string> {
   } Risk note: pools with reward APY above 60 percent of the headline number stay flagged.`;
 }
 
-async function generateYieldSnapshot(): Promise<{
+async function generateYieldSnapshot(goal?: string): Promise<{
   ts: string;
   top: { protocol: string; network: string; apy: number; tvl: number }[];
   oneLine: string;
@@ -393,12 +407,16 @@ async function generateYieldSnapshot(): Promise<{
   const ts = new Date().toISOString();
   const vaults = await fetchTopUsdcVaults().catch(() => []);
   const ranked = rankVaults(vaults).slice(0, 3);
-  const oneLine =
+  const goalMentionsSolana = /solana/i.test((goal ?? "").trim());
+  const baseLine =
     ranked.length === 0
       ? "LI.FI Earn returned no qualifying USDC vaults this fetch."
       : ranked
           .map((v) => `${v.protocol} on ${v.network} ${v.apy.toFixed(2)}%`)
           .join(" · ");
+  const oneLine = goalMentionsSolana
+    ? `LI.FI Earn has no Solana USDC vaults indexed; cross-chain top: ${baseLine}`
+    : baseLine;
   return {
     ts,
     top: ranked.map((v) => ({
@@ -569,16 +587,18 @@ const connection = new Connection(RPC, "confirmed");
 
 app.post(
   "/brief",
-  paidEndpoint("brief", 0.2, async () => {
-    const briefing = await generateBriefing();
+  paidEndpoint("brief", 0.2, async (req) => {
+    const goal = typeof req.body?.goal === "string" ? req.body.goal : undefined;
+    const briefing = await generateBriefing(goal);
     return { body: { briefing } };
   }),
 );
 
 app.post(
   "/yield-snapshot",
-  paidEndpoint("yield-snapshot", 0.05, async () => {
-    const snapshot = await generateYieldSnapshot();
+  paidEndpoint("yield-snapshot", 0.05, async (req) => {
+    const goal = typeof req.body?.goal === "string" ? req.body.goal : undefined;
+    const snapshot = await generateYieldSnapshot(goal);
     return { body: snapshot };
   }),
 );

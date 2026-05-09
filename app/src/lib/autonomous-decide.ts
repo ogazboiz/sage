@@ -62,12 +62,14 @@ export function buildDecidePolicy(
     if (shape === "briefing") {
       // Periodic brief. /brief = $0.20 each.
       // Send a fresh brief on iteration 0, then every fifth tick. Otherwise
-      // use the cheaper /yield-snapshot for status checks.
+      // use the cheaper /yield-snapshot for status checks. Pass the goal so
+      // the briefing prose can acknowledge the user's specific intent.
       if (iteration === 0 || iteration % 5 === 0) {
-        if (budgetRemaining >= 0.2) return { endpoint: "/brief" };
-        return { endpoint: "/yield-snapshot" };
+        if (budgetRemaining >= 0.2)
+          return { endpoint: "/brief", body: { goal: ctx.goal } };
+        return { endpoint: "/yield-snapshot", body: { goal: ctx.goal } };
       }
-      return { endpoint: "/yield-snapshot" };
+      return { endpoint: "/yield-snapshot", body: { goal: ctx.goal } };
     }
 
     if (shape === "content") {
@@ -116,8 +118,8 @@ export function buildDecidePolicy(
     // auto: fall back to the briefing pattern, mostly cheap snapshots with a
     // periodic full brief
     if (iteration === 0 && budgetRemaining >= 0.2) {
-      return { endpoint: "/brief" };
+      return { endpoint: "/brief", body: { goal: ctx.goal } };
     }
-    return { endpoint: "/yield-snapshot" };
+    return { endpoint: "/yield-snapshot", body: { goal: ctx.goal } };
   };
 }
