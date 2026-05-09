@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@solana/wallet-adapter-react";
 
+import { useCancelTask } from "@/hooks/useCancelTask";
 import { useDeposit } from "@/hooks/useDeposit";
 import { useSageProgram } from "@/hooks/useSageProgram";
 import { useInitVault } from "@/hooks/useInitVault";
@@ -93,6 +94,7 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
   const vaultBalance = useVaultUsdcBalance();
   const initVault = useInitVault();
   const deposit = useDeposit();
+  const cancelTask = useCancelTask();
   const { positions, totalDeployed, remove } = useYieldPositions();
 
   const balanceUsd = vaultBalance.data ?? 0;
@@ -298,6 +300,21 @@ export function VaultPanel({ ctx }: { ctx?: ScreenContext }) {
             <p className="text-[11px] text-sage-text-dim">
               {activeTask.stepsExecuted} steps executed
             </p>
+            <button
+              type="button"
+              onClick={() => cancelTask.mutate()}
+              disabled={cancelTask.isPending}
+              className="btn btn-sm w-full"
+            >
+              {cancelTask.isPending
+                ? "Cancelling…"
+                : "Cancel task and refund leftover"}
+            </button>
+            {cancelTask.isError && (
+              <p className="text-[10px] text-sage-danger break-all">
+                {(cancelTask.error as Error).message}
+              </p>
+            )}
           </div>
         )}
 
