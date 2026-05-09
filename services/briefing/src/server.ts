@@ -207,7 +207,8 @@ async function fetchTopUsdcVaults(): Promise<EarnVaultLite[]> {
     }
     if (!body.nextCursor || pageData.length === 0) break;
     cursor = body.nextCursor;
-    if (vaults.length >= 24) break; // enough for ranking
+    if (vaults.length >= 48) break; // collect a healthy candidate pool; the
+    // risk filter discards a chunk so we want headroom
   }
   console.log(
     "[briefing] LI.FI walked",
@@ -223,11 +224,22 @@ async function fetchTopUsdcVaults(): Promise<EarnVaultLite[]> {
 // Backwards alias for older callers in this file.
 const fetchTopSolanaUsdcVaults = fetchTopUsdcVaults;
 
+// Mirrors app/src/lib/ranker/risk-filter.ts. APY above 250% with TVL under
+// $2M is almost always a honeypot or a freshly-emitting reward pool. The
+// briefing should never headline these numbers.
+const HIGH_RISK_APY = 250;
+const HIGH_RISK_TVL = 2_000_000;
+// Hard ceiling: anything claiming >1000% APY is a data error or an
+// extreme outlier; surface it nowhere.
+const ABSURD_APY = 1_000;
+const PROTOCOL_DIVERSITY_CAP = 3;
+
 function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
-  return vaults
+  const ranked = vaults
     .map((v) => {
       const apy = v.analytics.apy.total ?? 0;
       const reward = v.analytics.apy.reward ?? 0;
+      const tvl = parseFloat(v.analytics.tvl.usd) || 0;
       return {
         slug: v.slug,
         protocol: v.protocol.name,
@@ -235,12 +247,26 @@ function rankVaults(vaults: EarnVaultLite[]): RankedVaultLite[] {
         apy,
         base: v.analytics.apy.base ?? 0,
         reward,
-        tvl: parseFloat(v.analytics.tvl.usd) || 0,
+        tvl,
         rewardHeavy: apy > 0 && reward / apy > 0.6 && apy > 8,
+        highRisk: apy > HIGH_RISK_APY && tvl < HIGH_RISK_TVL,
       };
     })
     .filter((v) => v.apy > 0)
+    .filter((v) => v.apy < ABSURD_APY)
+    .filter((v) => !v.highRisk)
     .sort((a, b) => b.apy - a.apy);
+
+  // Protocol diversity: don't let one protocol monopolise the top set.
+  const perProtocol = new Map<string, number>();
+  const diverse: RankedVaultLite[] = [];
+  for (const v of ranked) {
+    const seen = perProtocol.get(v.protocol) ?? 0;
+    if (seen >= PROTOCOL_DIVERSITY_CAP) continue;
+    perProtocol.set(v.protocol, seen + 1);
+    diverse.push(v);
+  }
+  return diverse;
 }
 
 function compactUsd(n: number): string {
