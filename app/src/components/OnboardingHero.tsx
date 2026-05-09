@@ -26,6 +26,10 @@ export function OnboardingHero() {
           Set a USDC budget. Speak a task. The Solana program enforces every cent.
         </p>
 
+        <p className="text-[13px] text-sage-text-dim italic leading-snug max-w-[520px] border-l-2 border-sage-accent pl-3">
+          After connecting, try: <span className="not-italic font-mono text-sage-text">"Run a cross-chain USDC briefing every 30 seconds for 2 minutes, max one dollar."</span>
+        </p>
+
         <div className="pt-1">
           <WalletMultiButton />
         </div>
