@@ -238,13 +238,19 @@ export default function TalkScreen() {
       setTranscript(prev => [...prev.slice(-9), text])
     },
     onError: (message, context) => {
-      // Events / DOMException-like objects have circular refs that crash
-      // JSON.stringify; coerce safely.
       const safeMsg =
         typeof message === 'string'
           ? message
           : (message as { message?: string })?.message ?? 'voice error'
-      console.error('[voice] error:', safeMsg, context)
+      // Pull the stack from any Error object floating in the context for
+      // debugging — without this, we only see the bare message and can't
+      // tell which class extension is failing.
+      const ctxAny = context as Record<string, unknown> | undefined
+      const inner = (ctxAny?.error ?? ctxAny?.cause ?? ctxAny) as Error | undefined
+      const stack = inner instanceof Error ? inner.stack : undefined
+      console.error('[voice] error:', safeMsg)
+      if (stack) console.error('[voice] stack:', stack)
+      console.error('[voice] context keys:', Object.keys(ctxAny ?? {}))
       setTranscript(prev => [...prev.slice(-9), `error: ${safeMsg}`])
     },
     onDisconnect: details => {
@@ -305,15 +311,20 @@ export default function TalkScreen() {
       Alert.alert('Microphone denied', 'Voice agent needs the microphone to work.')
       return
     }
+
+    // react-native-url-polyfill replaces globalThis.URL after our
+    // polyfill.js stubbed createObjectURL. Re-apply right here so the
+    // override is current when ElevenLabs grabs the audio worklet URL.
+    if (typeof globalThis.URL !== 'undefined') {
+      let _blobCounter = 0
+      // @ts-expect-error overriding the polyfilled URL methods
+      globalThis.URL.createObjectURL = () => `blob:rn-stub/${++_blobCounter}`
+      // @ts-expect-error overriding the polyfilled URL methods
+      globalThis.URL.revokeObjectURL = () => {}
+    }
+
     try {
-      // websocket > webrtc on the Android emulator — emulator NAT can't
-      // punch through to LiveKit/TURN, so webrtc fails with
-      // "NegotiationError: negotiation timed out". websocket avoids ICE
-      // entirely and matches what the Sage web app uses.
-      await conversation.startSession({
-        agentId: AGENT_ID,
-        connectionType: 'websocket',
-      } as never)
+      await conversation.startSession({ agentId: AGENT_ID } as never)
     } catch (err) {
       Alert.alert('Could not start session', (err as Error).message)
     }

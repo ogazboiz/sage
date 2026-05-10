@@ -1,23 +1,48 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { fromUint8Array, toUint8Array } from 'js-base64'
 import {
   type KeyPairSigner,
-  generateKeyPairSigner,
+  createKeyPairSignerFromPrivateKeyBytes,
 } from '@solana/kit'
 
-// Per-task ephemeral agent identity. The owner wallet authorises every
-// state change on the vault at approve_task time; the agent keypair is a
-// fresh ephemeral pubkey that the program then accepts as the alternate
-// signer for release_step + complete_task on that task.
+const STORAGE_KEY = 'sage:agent-keypair-v1'
+
+// Per-device persistent agent identity. The owner wallet authorises the
+// vault at init_user_vault time; the agent_keypair is set in the vault
+// state and is the only signer the program accepts for release_step and
+// complete_task. Storing the agent here lets the autonomous loop sign
+// every iteration locally — no MWA prompt, no app switching, no
+// Phantom session breakage.
 //
-// We generate a fresh signer per task (instead of persisting one across
-// sessions) for two reasons:
-//   1. @solana/kit's CryptoKeyPair is non-extractable by default, so we
-//      can't easily round-trip through AsyncStorage.
-//   2. The dApp Store demo flow doesn't need cross-session continuity —
-//      one approve → loop → complete cycle lives entirely in memory.
-//
-// If the user closes the app mid-task, the on-chain active slot is stuck
-// until the owner calls cancel_task (no funds at risk; the budget is
-// frozen, not spent).
-export async function createAgentSigner(): Promise<KeyPairSigner> {
-  return generateKeyPairSigner()
+// This mirrors the web app's localStorage-backed agent keypair pattern.
+// 32-byte private key seed is generated with crypto.getRandomValues,
+// fed to @solana/kit with extractable=true so we can round-trip
+// through AsyncStorage, base64-encoded for storage.
+
+async function generateRandomSeed(): Promise<Uint8Array> {
+  const seed = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(seed)
+  return seed
+}
+
+export async function loadOrCreateAgentSigner(): Promise<KeyPairSigner> {
+  const existing = await AsyncStorage.getItem(STORAGE_KEY)
+  if (existing) {
+    try {
+      const bytes = toUint8Array(existing)
+      if (bytes.length === 32) {
+        return await createKeyPairSignerFromPrivateKeyBytes(bytes, true)
+      }
+    } catch (err) {
+      console.warn('[agent-identity] failed to reload, regenerating:', err)
+    }
+  }
+  const seed = await generateRandomSeed()
+  const signer = await createKeyPairSignerFromPrivateKeyBytes(seed, true)
+  await AsyncStorage.setItem(STORAGE_KEY, fromUint8Array(seed))
+  return signer
+}
+
+export async function clearAgentSigner(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY)
 }

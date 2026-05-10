@@ -24,7 +24,7 @@ import {
 } from '@/lib/sage'
 import { USDC_MINT } from '@/lib/sage/constants'
 import { getAta } from '@/lib/sage/pdas'
-import { createAgentSigner } from '@/lib/agent-identity'
+import { loadOrCreateAgentSigner } from '@/lib/agent-identity'
 import { fetchChallenge, settleAndFetch } from '@/lib/x402'
 import type {
   DecidePolicy,
@@ -137,15 +137,15 @@ export function useAutonomousTask() {
 
     let completeSig: string | null = null
     try {
-      // Owner-signed via MWA — vault.agent_keypair was set to owner at
-      // init_vault time, so the owner is the authorised signer.
+      // Agent-signed locally via @solana/kit — no MWA prompt, no app
+      // switch. vault.agent_keypair was set to this agent's pubkey at
+      // init_user_vault time, so the program accepts it.
       const completeIx = await buildCompleteTaskIx({
         owner: account.address as Address,
-        signer: account.address as Address,
+        signer: task.agent.address,
         taskId: task.taskId,
       })
-      const sigResult = await sendTransaction([completeIx])
-      completeSig = String(sigResult ?? '')
+      completeSig = await sendAgentTx([completeIx], task.agent)
     } catch (err) {
       console.warn('[autonomous] complete_task failed:', (err as Error).message)
     }
@@ -236,21 +236,20 @@ export function useAutonomousTask() {
       }
 
       const recipient = challenge.recipient as Address
-      // Owner pays for ATA creation + signs release_step. MWA prompts on
-      // each iteration — not fully autonomous, but matches the existing
-      // vault's agent_keypair = owner setup.
-      const createAtaIx = await buildCreateRecipientUsdcIx(account.address as Address, recipient)
+      // Agent pays for ATA creation + signs release_step. No MWA, no
+      // app switch — the agent keypair lives in memory + AsyncStorage,
+      // signs locally via @solana/kit, and submits over RPC directly.
+      const createAtaIx = await buildCreateRecipientUsdcIx(task.agent.address, recipient)
       const releaseIx = await buildReleaseStepIx({
         owner: account.address as Address,
-        signer: account.address as Address,
+        signer: task.agent.address,
         recipientUsdc: await deriveRecipientUsdc(recipient),
         taskId: task.taskId,
         amountBaseUnits,
       })
       const memoIx = getAddMemoInstruction({ memo: challenge.nonce })
 
-      const sigResult = await sendTransaction([createAtaIx, releaseIx, memoIx])
-      const sig = String(sigResult ?? '')
+      const sig = await sendAgentTx([createAtaIx, releaseIx, memoIx], task.agent)
 
       const result = await settleAndFetch<Record<string, unknown>>(
         serviceUrl,
@@ -289,9 +288,6 @@ export function useAutonomousTask() {
         return
       }
     } catch (err) {
-      // SolanaError carries program logs in `context`. Surface them so the
-      // user can see "Anchor 6001 InsufficientFunds" rather than a generic
-      // "Transaction simulation failed".
       const solErr = err as Error & {
         context?: Record<string, unknown>
         cause?: { context?: Record<string, unknown> }
@@ -303,10 +299,29 @@ export function useAutonomousTask() {
       const detail = logs?.length
         ? `${solErr.message}\n${logs.slice(-6).join('\n')}`
         : solErr.message
-      console.error('[autonomous] tick failed:', detail, ctx ?? '')
-      setError(detail)
-      await finalize()
-      return
+      console.error('[autonomous] tick failed:', detail)
+      console.error('[autonomous] err.name:', solErr.name)
+      if (solErr.stack) console.error('[autonomous] stack:', solErr.stack)
+
+      // Hard failures (program error or wallet auth rejection) end the
+      // task. Soft failures (network blip, brief 5xx) just skip this
+      // tick and try again next interval.
+      const isHardFailure =
+        solErr.name === 'SolanaMobileWalletAdapterProtocolError' ||
+        (typeof detail === 'string' &&
+          (detail.includes('Anchor') ||
+            detail.includes('Unauthorized') ||
+            detail.includes('InsufficientFunds') ||
+            detail.includes('TaskActive')))
+
+      if (isHardFailure) {
+        setError(detail)
+        await finalize()
+        return
+      }
+
+      // Soft failure — keep the loop alive, retry next tick
+      console.warn('[autonomous] soft failure, retrying next interval')
     }
 
     if (task.active) {
@@ -323,11 +338,10 @@ export function useAutonomousTask() {
       setWrapUp(null)
       setStatus('approving')
 
-      const agent = await createAgentSigner()
+      // Load (or create) the persistent agent keypair. Same agent that
+      // was passed to init_user_vault and stored in vault.agent_keypair.
+      const agent = await loadOrCreateAgentSigner()
 
-      // Step 1 — drip SOL to agent for tx fees + open the task on-chain.
-      // Both are owner-signed, batched into one MWA prompt so the user sees
-      // exactly one approval popup.
       const taskId = taskIdFromString(`auto-${Date.now().toString(36)}`)
       const budgetBaseUnits = toBaseUnits(params.budget)
       const expiresAt = BigInt(
@@ -335,11 +349,20 @@ export function useAutonomousTask() {
           Math.max(60, Math.ceil(params.durationMinutes * 60) + 30),
       )
 
-      const topupIx = buildSystemTransferIx(
-        account.address as Address,
-        agent.address,
-        AGENT_FEE_RESERVE_LAMPORTS,
-      )
+      // Check agent SOL balance — only top up if it's below the reserve.
+      // Bundles a SystemProgram.transfer with approve_task into one MWA
+      // prompt so the user sees exactly one wallet popup for the whole
+      // session.
+      let agentSol = 0n
+      try {
+        const bal = await client.rpc.getBalance(agent.address).send()
+        agentSol = BigInt(bal.value)
+      } catch (err) {
+        console.warn('[autonomous] agent balance check failed:', (err as Error).message)
+      }
+      const needsTopup = agentSol < AGENT_FEE_RESERVE_LAMPORTS
+      const topupAmount = needsTopup ? AGENT_FEE_RESERVE_LAMPORTS - agentSol : 0n
+
       const approveIx = await buildApproveTaskIx({
         owner: account.address as Address,
         taskId,
@@ -347,14 +370,38 @@ export function useAutonomousTask() {
         expiresAtSeconds: expiresAt,
       })
 
-      await sendTransaction([topupIx, approveIx])
+      const ixs = needsTopup
+        ? [
+            buildSystemTransferIx(account.address as Address, agent.address, topupAmount),
+            approveIx,
+          ]
+        : [approveIx]
 
+      // ONE MWA prompt for the whole session: drip SOL to agent (if
+      // needed) + open the on-chain budget cap. After this, every tick
+      // signs locally with the agent keypair — no more wallet popups.
+      const approveSigResult = await sendTransaction(ixs)
+      const approveSig = String(approveSigResult ?? '')
+      if (approveSig) {
+        await waitForConfirm(client.rpc, approveSig).catch(err => {
+          console.warn('[autonomous] approve_task confirm timeout:', (err as Error).message)
+        })
+      }
+
+      // Best-effort sanity check — emulator RPC is unreliable after
+      // Phantom app-switches, so we don't block on it. Just give the
+      // network 5s and trust the sig MWA returned. If approve didn't
+      // actually land, the first tick will surface NoActiveTask and
+      // we'll finalize cleanly.
+      await new Promise(r => setTimeout(r, 5_000))
+
+      const startedAt = Date.now()
       taskRef.current = {
         active: true,
         taskId,
         agent,
         budgetRemainingBaseUnits: budgetBaseUnits,
-        startedAt: Date.now(),
+        startedAt,
         durationMs: params.durationMinutes * 60_000,
         intervalMs: Math.max(1_000, params.intervalSeconds * 1_000),
         iterations: [],
@@ -364,12 +411,12 @@ export function useAutonomousTask() {
       setIterations([])
       setBudgetTotal(params.budget)
       setBudgetRemaining(params.budget)
-      setEndsAt(Date.now() + params.durationMinutes * 60_000)
+      setEndsAt(startedAt + params.durationMinutes * 60_000)
       setStatus('running')
 
       timerRef.current = setTimeout(tick, 500)
     },
-    [account, sendTransaction, tick],
+    [account, client, sendTransaction, tick],
   )
 
   const stop = useCallback(async () => {

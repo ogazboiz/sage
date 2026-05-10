@@ -22,13 +22,19 @@ function u64LE(value: bigint): Uint8Array {
   return buf
 }
 
-// InitUserVault — uses owner as agent pubkey for demo purposes
-export async function buildInitVaultIx(owner: Address): Promise<Instruction> {
+// InitUserVault — caller passes the ephemeral agent pubkey that will
+// be allowed to sign release_step + complete_task on this vault. For
+// the silent autonomous loop, this is a persistent KeyPairSigner held
+// in AsyncStorage (see lib/agent-identity.ts).
+export async function buildInitVaultIx(
+  owner: Address,
+  agentKeypair: Address,
+): Promise<Instruction> {
   const [vaultPda] = await getVaultPda(owner)
   const vaultUsdc  = await getVaultUsdc(vaultPda)
   const data = new Uint8Array(40)
   data.set(DISC_INIT_VAULT, 0)
-  data.set(enc.encode(owner), 8)   // agentKeypair = owner
+  data.set(enc.encode(agentKeypair), 8)
 
   return {
     programAddress: PROGRAM_ADDRESS,

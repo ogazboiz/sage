@@ -812,8 +812,11 @@ app.get("/health", (_, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Sage paid-services on :${PORT}`);
+// Bind to 0.0.0.0 explicitly so the Android emulator (10.0.2.2 → host
+// IPv4 loopback) can reach the service. Node's default would bind to
+// IPv6-only on macOS, which the emulator can't connect to.
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Sage paid-services on 0.0.0.0:${PORT}`);
   console.log(`  treasury: ${TREASURY.toBase58()}`);
   console.log(`  treasury ATA: ${treasuryAta.toBase58()}`);
   console.log(`  mint: ${MINT.toBase58()}`);
