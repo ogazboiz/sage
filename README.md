@@ -212,6 +212,84 @@ The briefing service auto-loads `app/.env.local` via Node's `--env-file-if-exist
 
 ---
 
+## Mobile (Expo + React Native + Mobile Wallet Adapter)
+
+Native Android app with Mobile Wallet Adapter integration. Same Anchor program, same x402 endpoints, same LI.FI Earn ranker — all signed via on-device wallet.
+
+### What runs on mobile
+- 4 tabs: Talk · Vault · Bridge · Activity
+- `init_user_vault` / `deposit` / `withdraw` via MWA
+- `approve_task` via MWA (one prompt per task)
+- `release_step` + `complete_task` signed locally by a persistent ephemeral agent keypair held in AsyncStorage — silent autonomous loop after the initial approve
+- LI.FI Composer bridge quotes hitting `li.quest/v1/quote` directly
+- ElevenLabs voice agent (works on real Android devices; emulator's WebRTC NAT is unreliable)
+
+### Verified on-chain
+A single Sage vault on devnet running the full silent loop end-to-end:
+[`Fw1ZEohoKQLfkg59ie9Yg7bNzy5L4Z5rMYKuQmy3nJXG`](https://solscan.io/account/Fw1ZEohoKQLfkg59ie9Yg7bNzy5L4Z5rMYKuQmy3nJXG?cluster=devnet) — `init_user_vault` → `deposit` → `approve_task` → 4× `release_step` → `complete_task`, all in one task with zero MWA prompts after the first approve.
+
+### Prerequisites
+- Android Studio (Panda 4 / 2025.3.4 or newer) with API 34 SDK + system image
+- Pixel 7 / API 34 AVD (or a real Android device with USB debugging on)
+- JDK 21 — Android Studio bundles one at `/Applications/Android Studio.app/Contents/jbr/Contents/Home`
+
+Set in `~/.zshrc`:
+```bash
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+```
+
+### Run
+
+```bash
+cd mobile
+pnpm install
+cp .env.example .env.local      # fill EXPO_PUBLIC_ELEVENLABS_AGENT_ID + EXPO_PUBLIC_BRIEFING_URL
+pnpm android                    # builds debug APK + installs on connected device/emulator
+```
+
+`EXPO_PUBLIC_BRIEFING_URL` defaults to `http://10.0.2.2:3001` for the emulator (host machine alias). Real device users should point this at a deployed briefing service URL.
+
+### Build a release APK (for the dApp Store)
+
+```bash
+# One-time keystore generation
+keytool -genkey -v -keystore mobile/android/app/sage-release.keystore \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias sage
+
+# Configure release signingConfig in mobile/android/app/build.gradle
+# Then:
+cd mobile/android && ./gradlew assembleRelease
+# Output: mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Sage Mobile package layout
+
+```
+mobile/
+├── app/                          Expo Router screens
+│   ├── index.tsx                 OnboardingHero gate (shown until wallet connects)
+│   └── (tabs)/                   Talk · Vault · Bridge · Activity
+├── components/
+│   ├── app-providers.tsx         MobileWalletProvider + ConversationProvider + ReactQuery
+│   └── onboarding-hero.tsx       Connect screen
+├── hooks/
+│   ├── use-init-vault.ts         init_user_vault with persistent agent pubkey
+│   ├── use-deposit.ts            spl-token deposit
+│   ├── use-autonomous-task.ts    silent loop (one MWA prompt, agent keypair signs ticks)
+│   └── use-cancel-task.ts        owner force-cancel for stale slot recovery
+├── lib/
+│   ├── agent-identity.ts         AsyncStorage-backed extractable Ed25519 keypair
+│   ├── autonomous-decide.ts      shape policy (briefing/monitor/content/market/auto)
+│   ├── lifi/                     Composer quote client
+│   ├── sage/                     program SDK (constants, pdas, instructions, vault decode)
+│   └── x402/                     fetchChallenge + settleAndFetch
+└── polyfill.js                   crypto + Web/DOM shims for RN 0.83 + Hermes
+```
+
+---
+
 ## Repo layout
 
 ```
