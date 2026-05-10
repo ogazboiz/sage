@@ -1,5 +1,5 @@
 {
-  "name": "Farit",
+  "name": "sage-mobile",
   "scripts": {
     "android": "expo run:android",
     "android:build": "expo prebuild -p android",
@@ -27,8 +27,13 @@
   "main": "./index.js",
   "version": "1.0.0",
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "^14.0.0",
+    "@elevenlabs/react-native": "^1.2.0",
     "@expo/metro-runtime": "~55.0.6",
     "@expo/vector-icons": "^15.0.3",
+    "@livekit/react-native": "^2.10.2",
+    "@livekit/react-native-expo-plugin": "^1.0.2",
+    "@livekit/react-native-webrtc": "^144.0.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-navigation/bottom-tabs": "^7.4.0",
@@ -37,6 +42,7 @@
     "@rn-primitives/dropdown-menu": "^1.2.0",
     "@solana-program/memo": "^0.11.0",
     "@solana/kit": "^6.1.0",
+    "@solana/webcrypto-ed25519-polyfill": "^6.9.0",
     "@tanstack/react-query": "^5.90.7",
     "@wallet-ui/react-native-kit": "^4.0.1",
     "expo": "~55.0.8",
@@ -53,6 +59,7 @@
     "expo-system-ui": "~55.0.10",
     "expo-web-browser": "~55.0.10",
     "js-base64": "^3.7.8",
+    "livekit-client": "^2.18.9",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
@@ -71,6 +78,11 @@
     "eslint-config-expo": "~55.0.0",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "unrs-resolver"
+    ]
   },
   "private": true
 }

@@ -12,6 +12,7 @@ import { useVaultAccount } from '@/hooks/use-vault-account'
 import { useOwnerUsdcBalance, useVaultUsdcBalance } from '@/hooks/use-usdc-balance'
 import { useInitVault } from '@/hooks/use-init-vault'
 import { useDeposit } from '@/hooks/use-deposit'
+import { useCancelTask } from '@/hooks/use-cancel-task'
 
 const PROGRAM_ID = '64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ'
 const short = (s: string, n = 6) => `${s.slice(0, n)}…${s.slice(-n)}`
@@ -45,6 +46,7 @@ export default function VaultScreen() {
   const vaultUsdc    = useVaultUsdcBalance()
   const initVault    = useInitVault()
   const deposit      = useDeposit()
+  const cancelTask   = useCancelTask()
 
   const [depositAmt, setDepositAmt] = useState('0.10')
 
@@ -150,6 +152,29 @@ export default function VaultScreen() {
                 )}
               </View>
             </View>
+
+            {/* Cancel-task recovery — appears if vault has stale active task */}
+            {vault.data?.activeTask && (
+              <View style={[styles.errorBanner, { gap: 8 }]}>
+                <Text style={styles.errorBannerText}>
+                  ⚠ Active task on vault · ${vault.data.activeTask.budgetRemaining.toFixed(2)} reserved
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    cancelTask.mutate(undefined, {
+                      onError: e => Alert.alert('Cancel failed', (e as Error).message),
+                    })
+                  }
+                  disabled={cancelTask.isPending}
+                  style={[appStyles.btnOutline, cancelTask.isPending && { opacity: 0.5 }]}
+                >
+                  <Text style={appStyles.btnOutlineText}>
+                    {cancelTask.isPending ? 'Cancelling…' : 'Cancel & refund'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Init vault */}
             {!vaultExists && !vault.isLoading && (
@@ -280,7 +305,11 @@ export default function VaultScreen() {
               <InfoRow label="Network"   value="Solana Devnet" />
             </View>
 
-            <AccountFeatureDisconnect />
+            {/* Disconnect — same role as the WalletMultiButton dropdown on
+                web. Kept compact; nav handles the rest. */}
+            <View style={{ alignItems: 'flex-start', marginTop: 4 }}>
+              <AccountFeatureDisconnect />
+            </View>
           </>
         )}
       </ScrollView>

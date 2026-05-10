@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "sage",
+    "name": "Sage",
     "slug": "sage",
+    "description": "Voice-first AI agent wallet on Solana with on-chain budget enforcement.",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "expokit",
+    "scheme": "sage",
     "userInterfaceStyle": "light",
     "androidStatusBar": {
       "barStyle": "dark-content",
@@ -17,7 +18,12 @@
       "backgroundColor": "#f0eee9"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Sage needs the microphone for the voice agent that authorises Solana transactions on your vault.",
+        "NSCameraUsageDescription": "Sage uses the camera only to scan deposit QR codes (optional).",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +33,16 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.kit_expo_minimal"
+      "package": "com.anonymous.kit_expo_minimal",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "output": "static",
@@ -45,7 +60,9 @@
           "backgroundColor": "#fafaf7"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
     ],
     "experiments": {
       "reactCompiler": true,

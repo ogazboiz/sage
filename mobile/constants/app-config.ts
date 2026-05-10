@@ -1,4 +1,4 @@
-import { AppIdentity, createSolanaDevnet, createSolanaTestnet, SolanaCluster } from '@wallet-ui/react-native-kit'
+import { AppIdentity, createSolanaDevnet, SolanaCluster } from '@wallet-ui/react-native-kit'
 
 export class AppConfig {
   static identity: AppIdentity = {
@@ -6,8 +6,12 @@ export class AppConfig {
     uri: 'https://sage.app',
     icon: 'favicon.ico',
   }
+  // Sage's program is deployed to devnet only — declaring just devnet
+  // avoids wallet "incorrect mode" warnings when the user only has
+  // devnet permission enabled in the wallet.
   static networks: SolanaCluster[] = [
-    createSolanaDevnet({ url: 'https://api.devnet.solana.com' }),
-    createSolanaTestnet({ url: 'https://api.testnet.solana.com' }),
+    createSolanaDevnet({
+      url: process.env.EXPO_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com',
+    }),
   ]
 }

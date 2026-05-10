@@ -1,32 +1,35 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import React, { useEffect, useState } from 'react'
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, appStyles, shadows } from '@/constants/app-styles'
+import { useAutonomousTask } from '@/hooks/use-autonomous-task'
+import { buildDecidePolicy, type Shape } from '@/lib/autonomous-decide'
 
-type Shape     = 'briefing' | 'monitor' | 'content' | 'auto'
-type TaskStatus = 'idle' | 'approving' | 'running' | 'stopped' | 'error'
+type LocalShape = Shape
 
-const SHAPES: { value: Shape; label: string; sample: string }[] = [
-  { value: 'briefing', label: 'Briefing', sample: 'Brief me on Solana DeFi every minute for 5 minutes' },
+const SHAPES: { value: LocalShape; label: string; sample: string }[] = [
+  { value: 'briefing', label: 'Briefing', sample: 'Brief me on cross-chain USDC every minute for 3 minutes' },
   { value: 'monitor',  label: 'Monitor',  sample: 'Watch Kamino USDC every 30 seconds. Alert on tier change.' },
-  { value: 'content',  label: 'Content',  sample: 'Draft me a short Solana DeFi report' },
+  { value: 'content',  label: 'Content',  sample: 'Draft a short cross-chain USDC report' },
+  { value: 'market',   label: 'Market',   sample: 'Pulse SOL ETH BTC every 30 seconds' },
   { value: 'auto',     label: 'Auto',     sample: 'Whatever fits the goal' },
 ]
 
 const HOW = [
-  'Sign once to approve a USDC spending cap.',
-  'The agent runs on-chain steps at your chosen interval.',
-  'Each step is paid from the vault via x402.',
-  'Unused budget is refunded when you stop.',
+  'Sign once to approve a USDC spending cap on the vault.',
+  'A fresh agent keypair signs each loop step on-chain.',
+  'Each step is paid via x402 from the vault.',
+  'Unused budget is refunded automatically when you stop.',
 ]
 
 function formatMs(ms: number) {
+  if (ms <= 0) return '0:00'
   const m = Math.floor(ms / 60_000)
   const s = Math.floor((ms % 60_000) / 1_000)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function NumField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NumField({ label, value, onChange, editable = true }: { label: string; value: string; onChange: (v: string) => void; editable?: boolean }) {
   return (
     <View style={{ flex: 1, gap: 6 }}>
       <Text style={appStyles.sectionLabel}>{label}</Text>
@@ -34,7 +37,8 @@ function NumField({ label, value, onChange }: { label: string; value: string; on
         value={value}
         onChangeText={onChange}
         keyboardType="decimal-pad"
-        style={styles.numInput}
+        editable={editable}
+        style={[styles.numInput, !editable && { opacity: 0.5 }]}
         placeholderTextColor={colors.textMuted}
       />
     </View>
@@ -52,42 +56,65 @@ function BigCounter({ label, value, sub, accent = false }: { label: string; valu
 }
 
 export default function ActivityScreen() {
-  const [shape, setShape]           = useState<Shape>('briefing')
-  const [goal, setGoal]             = useState(SHAPES[0]!.sample)
-  const [budget, setBudget]         = useState('1.00')
+  const task = useAutonomousTask()
+
+  const [shape, setShape] = useState<LocalShape>('briefing')
+  const [goal, setGoal] = useState(SHAPES[0]!.sample)
+  const [budget, setBudget] = useState('1.00')
   const [intervalSec, setIntervalSec] = useState('30')
-  const [durationMin, setDurationMin] = useState('5')
-  const [taskStatus, setTask]       = useState<TaskStatus>('idle')
-  const [iterations, setIterations] = useState(0)
-  const [msLeft, setMsLeft]         = useState(0)
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [durationMin, setDurationMin] = useState('3')
+  const [showFormAfterWrap, setShowFormAfterWrap] = useState(false)
 
+  // Live countdown derived from endsAt
+  const [msLeft, setMsLeft] = useState(0)
   useEffect(() => {
-    if (taskStatus === 'running') {
-      const total = parseFloat(durationMin) * 60_000
-      setMsLeft(total)
-      timer.current = setInterval(() => {
-        setMsLeft(p => {
-          const n = p - 1_000
-          if (n <= 0) { clearInterval(timer.current!); setTask('stopped'); return 0 }
-          return n
-        })
-        setIterations(n => n + 1)
-      }, 1_000)
-    }
-    return () => { if (timer.current) clearInterval(timer.current) }
-  }, [taskStatus])
+    if (task.status !== 'running' || !task.endsAt) return
+    const id = setInterval(() => {
+      const remaining = (task.endsAt ?? 0) - Date.now()
+      setMsLeft(Math.max(0, remaining))
+    }, 500)
+    return () => clearInterval(id)
+  }, [task.status, task.endsAt])
 
-  const isRunning  = taskStatus === 'running'
-  const isApproving = taskStatus === 'approving'
-  const budgetNum  = parseFloat(budget || '0')
+  const isRunning   = task.status === 'running'
+  const isApproving = task.status === 'approving'
+  const isStopping  = task.status === 'stopping'
+  const isStopped   = task.status === 'stopped'
+  const showWrapUp  = isStopped && task.wrapUp && !showFormAfterWrap
+  const showForm    = !isRunning && !isApproving && !isStopping && !showWrapUp
+  const budgetNum   = parseFloat(budget || '0')
 
-  const statusPill = taskStatus === 'running' ? [appStyles.pill, appStyles.pillAccent]
-    : taskStatus === 'error' ? [appStyles.pill, styles.pillDanger]
+  const statusPillStyle = isRunning
+    ? [appStyles.pill, appStyles.pillAccent]
+    : task.status === 'error'
+    ? [appStyles.pill, styles.pillDanger]
     : appStyles.pill
-  const statusText = taskStatus === 'running' ? [appStyles.pillText, appStyles.pillAccentText]
-    : taskStatus === 'error' ? [appStyles.pillText, { color: colors.danger }]
+  const statusTextStyle = isRunning
+    ? [appStyles.pillText, appStyles.pillAccentText]
+    : task.status === 'error'
+    ? [appStyles.pillText, { color: colors.danger }]
     : appStyles.pillText
+
+  const onStart = async () => {
+    if (!Number.isFinite(budgetNum) || budgetNum <= 0) {
+      Alert.alert('Invalid budget', 'Enter a positive USDC amount')
+      return
+    }
+    const intervalSeconds = Math.max(1, parseInt(intervalSec, 10) || 30)
+    const durationMinutes = Math.max(1, parseFloat(durationMin) || 3)
+    try {
+      setShowFormAfterWrap(false)
+      await task.start({
+        goal,
+        budget: budgetNum,
+        intervalSeconds,
+        durationMinutes,
+        decide: buildDecidePolicy({ goal, shape }),
+      })
+    } catch (err) {
+      Alert.alert('Could not start task', (err as Error).message)
+    }
+  }
 
   return (
     <SafeAreaView style={appStyles.screen} edges={['top']}>
@@ -109,13 +136,13 @@ export default function ActivityScreen() {
         <View style={appStyles.card}>
           <View style={[appStyles.spaceBetween, { marginBottom: 20 }]}>
             <Text style={styles.cardTitle}>Autonomous task</Text>
-            <View style={statusPill}>
-              <Text style={statusText}>● {taskStatus}</Text>
+            <View style={statusPillStyle as never}>
+              <Text style={statusTextStyle as never}>● {task.status}</Text>
             </View>
           </View>
 
           {/* SETUP FORM */}
-          {!isRunning && taskStatus !== 'stopped' && (
+          {showForm && (
             <View style={{ gap: 20 }}>
               {/* Shape pills */}
               <View style={{ gap: 8 }}>
@@ -156,14 +183,20 @@ export default function ActivityScreen() {
               {/* Params */}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <NumField label="Budget USDC" value={budget}      onChange={setBudget} />
-                <NumField label="Interval s"   value={intervalSec} onChange={setIntervalSec} />
-                <NumField label="Duration min" value={durationMin} onChange={setDurationMin} />
+                <NumField label="Interval s"  value={intervalSec} onChange={setIntervalSec} />
+                <NumField label="Duration m"  value={durationMin} onChange={setDurationMin} />
               </View>
+
+              {task.error && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{task.error}</Text>
+                </View>
+              )}
 
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={[appStyles.btnPrimary, { paddingVertical: 16 }, isApproving && { opacity: 0.5 }]}
-                onPress={() => { setIterations(0); setTask('approving'); setTimeout(() => setTask('running'), 1200) }}
+                onPress={onStart}
                 disabled={isApproving}
               >
                 <Text style={[appStyles.btnPrimaryText, { fontSize: 15 }]}>
@@ -173,43 +206,92 @@ export default function ActivityScreen() {
             </View>
           )}
 
+          {/* APPROVING — single-prompt MWA flow */}
+          {isApproving && (
+            <View style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}>
+              <Text style={styles.cardTitle}>Approve in your wallet</Text>
+              <Text style={[appStyles.sectionLabel, { color: colors.textSub, textAlign: 'center' }]}>
+                One signature: drips SOL to the agent + opens the on-chain task.
+              </Text>
+            </View>
+          )}
+
           {/* LIVE COUNTERS */}
           {isRunning && (
             <View style={{ gap: 16 }}>
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <BigCounter label="Cap left"   value={`$${budgetNum.toFixed(2)}`} sub={`of $${budgetNum.toFixed(2)}`} />
-                <BigCounter label="Time left"  value={formatMs(msLeft)}            sub="m:ss" accent />
-                <BigCounter label="Iterations" value={String(iterations)}          sub="on-chain" />
+                <BigCounter
+                  label="Cap left"
+                  value={`$${task.budgetRemaining.toFixed(2)}`}
+                  sub={`of $${task.budgetTotal.toFixed(2)}`}
+                />
+                <BigCounter label="Time left" value={formatMs(msLeft)} sub="m:ss" accent />
+                <BigCounter label="Iterations" value={String(task.iterations.length)} sub="on-chain" />
               </View>
               <TouchableOpacity
                 activeOpacity={0.8}
                 style={appStyles.btnOutline}
-                onPress={() => { if (timer.current) clearInterval(timer.current); setTask('stopped') }}
+                onPress={() => task.stop()}
               >
                 <Text style={appStyles.btnOutlineText}>Stop and refund leftover</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* STOPPED */}
-          {taskStatus === 'stopped' && (
+          {/* STOPPING */}
+          {isStopping && (
+            <View style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}>
+              <Text style={styles.cardTitle}>Closing on-chain…</Text>
+              <Text style={[appStyles.sectionLabel, { color: colors.textSub }]}>refunding leftover budget</Text>
+            </View>
+          )}
+
+          {/* WRAP-UP */}
+          {showWrapUp && task.wrapUp && (
             <View style={{ gap: 14 }}>
-              <View style={styles.stoppedBox}>
-                <Text style={styles.stoppedText}>
-                  {iterations > 0
-                    ? `Completed ${iterations} iteration${iterations !== 1 ? 's' : ''}. Vault refunded.`
-                    : 'Closed before any iterations. Vault refunded.'}
-                </Text>
+              <View style={styles.wrapBox}>
+                <Text style={styles.wrapTitle}>Task complete</Text>
+                <Text style={styles.wrapSummary}>{task.wrapUp.summary}</Text>
+                <View style={styles.wrapStats}>
+                  <Text style={styles.wrapStat}>
+                    {task.wrapUp.iterationCount} iterations · ${task.wrapUp.totalSpent.toFixed(2)} spent
+                  </Text>
+                </View>
               </View>
-              <TouchableOpacity activeOpacity={0.8} style={appStyles.btnOutline} onPress={() => setTask('idle')}>
-                <Text style={appStyles.btnOutlineText}>New task</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={appStyles.btnOutline}
+                onPress={() => setShowFormAfterWrap(true)}
+              >
+                <Text style={appStyles.btnOutlineText}>Run another task ›</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* How it works */}
-        {taskStatus === 'idle' && (
+        {/* Live iteration log */}
+        {(isRunning || (isStopped && task.iterations.length > 0)) && (
+          <View style={appStyles.card}>
+            <Text style={[appStyles.sectionLabel, { marginBottom: 12 }]}>Iterations</Text>
+            {task.iterations.length === 0 && (
+              <Text style={[appStyles.mono, { color: colors.textMuted, fontSize: 11 }]}>
+                Waiting for first tick…
+              </Text>
+            )}
+            {task.iterations.slice().reverse().map(it => (
+              <View key={it.signature} style={styles.iterRow}>
+                <View style={styles.iterHead}>
+                  <Text style={styles.iterEndpoint}>{it.endpoint}</Text>
+                  <Text style={appStyles.mono}>${it.amount.toFixed(2)}</Text>
+                </View>
+                <Text style={styles.iterResult} numberOfLines={3}>{it.result}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* How it works (only when idle) */}
+        {showForm && task.iterations.length === 0 && (
           <View style={appStyles.card}>
             <Text style={[appStyles.sectionLabel, { marginBottom: 14 }]}>How it works</Text>
             {HOW.map((line, i) => (
@@ -238,23 +320,21 @@ const styles = StyleSheet.create({
   headNum:   { fontFamily: 'monospace', fontSize: 11, letterSpacing: 3, color: colors.textMuted },
   headTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.4 },
   dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent,
-                shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 4 },
+               shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 4 },
   cardTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
 
-  // Shape pills — fully filled when active
   shapeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   shapePill: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
     backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
   },
   shapePillActive: {
     backgroundColor: colors.accent, borderColor: colors.accent,
     ...shadows.accent,
   },
-  shapePillText:       { fontFamily: 'monospace', fontSize: 12, fontWeight: '600', color: colors.textSub },
+  shapePillText: { fontFamily: 'monospace', fontSize: 11, fontWeight: '600', color: colors.textSub },
   shapePillTextActive: { color: '#000', fontWeight: '800' },
 
-  // Inputs
   goalInput: {
     borderWidth: 1, borderColor: colors.borderBright, borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 12,
@@ -270,7 +350,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceHigh, fontFamily: 'monospace',
   },
 
-  // Counters
   counter: {
     flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
     padding: 14, alignItems: 'center', backgroundColor: colors.surfaceHigh, gap: 4,
@@ -281,17 +360,32 @@ const styles = StyleSheet.create({
     color: colors.textPrimary, letterSpacing: -0.5, marginVertical: 3,
   },
 
-  // Stopped
-  stoppedBox: {
-    backgroundColor: colors.surfaceHigh, borderWidth: 1,
-    borderColor: colors.border, borderRadius: 10, padding: 14,
+  wrapBox: {
+    backgroundColor: colors.accentDim, borderWidth: 1,
+    borderColor: colors.accent, borderRadius: 12, padding: 14, gap: 8,
   },
-  stoppedText: { fontFamily: 'monospace', fontSize: 12, color: colors.textSub, lineHeight: 18 },
+  wrapTitle: { fontSize: 14, fontWeight: '800', color: colors.accent },
+  wrapSummary: { fontSize: 13, color: colors.textPrimary, lineHeight: 19 },
+  wrapStats: { paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.accent },
+  wrapStat: { fontFamily: 'monospace', fontSize: 11, color: colors.textSub },
 
-  // Status pills
-  pillDanger: { backgroundColor: colors.dangerDim, borderColor: colors.danger },
+  errorBanner: {
+    backgroundColor: 'rgba(255,90,117,0.1)', borderWidth: 1, borderColor: colors.danger,
+    borderRadius: 8, padding: 10,
+  },
+  errorText: { fontFamily: 'monospace', fontSize: 11, color: colors.danger },
 
-  // How it works
+  pillDanger: { backgroundColor: 'rgba(255,90,117,0.1)', borderColor: colors.danger },
+
+  iterRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.rule,
+    gap: 4,
+  },
+  iterHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  iterEndpoint: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: colors.accent },
+  iterResult: { fontSize: 12, color: colors.textSub, lineHeight: 17 },
+
   howRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingVertical: 12 },
   howNum: {
     width: 26, height: 26, borderRadius: 13,
