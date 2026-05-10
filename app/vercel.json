@@ -2,7 +2,9 @@
   "rewrites": [
     { "source": "/api/lifi-earn/:path*", "destination": "https://earn.li.fi/:path*" },
     { "source": "/api/lifi-composer/:path*", "destination": "https://li.quest/:path*" },
-    { "source": "/api/elevenlabs/:path*", "destination": "https://api.elevenlabs.io/:path*" }
+    { "source": "/api/elevenlabs/:path*", "destination": "https://api.elevenlabs.io/:path*" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" }
   ],
   "redirects": [
     {

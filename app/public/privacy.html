@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sage — Privacy Policy</title>
+  <style>
+    body { max-width: 720px; margin: 0 auto; padding: 48px 24px; font-family: -apple-system, system-ui, sans-serif; color: #1f2937; line-height: 1.6; background: #fafaf7; }
+    h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: -0.4px; }
+    h2 { font-size: 16px; margin-top: 32px; margin-bottom: 8px; letter-spacing: -0.2px; }
+    p, li { font-size: 14px; }
+    code { font-family: ui-monospace, monospace; font-size: 13px; background: #f4f2ec; padding: 1px 4px; border-radius: 3px; }
+    .meta { font-family: ui-monospace, monospace; font-size: 12px; color: #4b5563; }
+    a { color: #0f766e; }
+  </style>
+</head>
+<body>
+  <h1>Sage — Privacy Policy</h1>
+  <p class="meta">Last updated: 10 May 2026</p>
+
+  <p>Sage ("we", "the app") is a non-custodial wallet companion that lets a user issue an AI agent a per-task USDC spending cap on the Solana blockchain. This page explains what data the app handles.</p>
+
+  <h2>What we collect</h2>
+  <p>Sage does not run a backend account system. The app does not collect, store, or transmit personally identifiable information to any server we operate. Specifically:</p>
+  <ul>
+    <li><strong>Wallet address.</strong> Public key only. Used to derive your vault PDA on Solana and sign on-chain instructions via Mobile Wallet Adapter. Never transmitted off-chain except when you explicitly sign an MWA prompt.</li>
+    <li><strong>Agent keypair.</strong> A 32-byte ephemeral Ed25519 keypair generated on first vault initialisation. Stored in AsyncStorage on the device. Never leaves the device. Used to sign autonomous loop transactions on-chain.</li>
+    <li><strong>Microphone audio</strong> (only when you tap "Start session" in Talk). Streamed live to ElevenLabs over WebRTC for the conversational AI agent. Not recorded or stored by Sage.</li>
+  </ul>
+
+  <h2>Third-party services</h2>
+  <p>The app makes network requests to:</p>
+  <ul>
+    <li><strong>Solana RPC</strong> (api.devnet.solana.com or your configured endpoint) — to read vault state and submit signed transactions. Public read of public on-chain data.</li>
+    <li><strong>LI.FI</strong> (li.quest, earn.li.fi) — to fetch cross-chain bridge quotes and yield data. No personal data sent.</li>
+    <li><strong>ElevenLabs</strong> (api.elevenlabs.io) — for voice agent. Audio streams while the session is active; only when you start a session.</li>
+    <li><strong>Briefing service</strong> (your configured endpoint) — pays per-call x402 micropayments from the vault. Receives the on-chain transaction signature for settlement; no personal data.</li>
+  </ul>
+
+  <h2>What we do not do</h2>
+  <ul>
+    <li>We do not collect analytics or telemetry.</li>
+    <li>We do not place tracking cookies or pixels.</li>
+    <li>We do not share data with advertising networks.</li>
+    <li>We do not custody your funds. All USDC is held in a Solana program-derived account (PDA) that only your wallet authorises.</li>
+  </ul>
+
+  <h2>Your data on-chain</h2>
+  <p>All vault balances, deposits, releases, and task budgets live on the Solana blockchain and are publicly verifiable. The Sage program ID is <code>64VYGx9kPeizgiqVRWGMBxbbsLV1n7YZTk8MezvpjqtZ</code> on devnet. Once data is on-chain we cannot remove it.</p>
+
+  <h2>Children</h2>
+  <p>Sage is not directed at children under 13.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: <a href="mailto:princeogagaoghene@gmail.com">princeogagaoghene@gmail.com</a></p>
+</body>
+</html>
